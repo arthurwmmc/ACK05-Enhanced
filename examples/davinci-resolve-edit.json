@@ -5,19 +5,167 @@
     {
       "id": "disabled-default",
       "name": "Disabled outside configured applications",
-      "tapHolds": [],
-      "comboDefaults": { "termMs": 50 },
-      "combos": [],
       "layers": [
         {
           "index": 0,
-          "bindings": []
+          "bindings": [
+            {
+              "control": "k1",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "k2",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "k3",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "k4",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "k5",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "k6",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "k7",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "k8",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "k9",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "k10",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "rollerClockwise",
+              "action": {
+                "kind": "disabled"
+              }
+            },
+            {
+              "control": "rollerCounterClockwise",
+              "action": {
+                "kind": "disabled"
+              }
+            }
+          ]
         },
         {
           "index": 1,
-          "bindings": []
+          "bindings": [
+            {
+              "control": "k1",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k2",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k3",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k4",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k5",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k6",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k7",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k8",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k9",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k10",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "rollerClockwise",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "rollerCounterClockwise",
+              "action": {
+                "kind": "transparent"
+              }
+            }
+          ]
         }
-      ]
+      ],
+      "tapHolds": [],
+      "comboDefaults": {
+        "termMs": 50
+      },
+      "combos": []
     },
     {
       "id": "davinci-resolve-edit",
@@ -25,79 +173,456 @@
       "applicationMatch": {
         "processName": "Resolve.exe"
       },
-      "tapHolds": [],
-      "comboDefaults": { "termMs": 50 },
-      "combos": [],
       "layers": [
         {
           "index": 0,
           "bindings": [
-            { "control": "k1", "action": { "kind": "keyboardChord", "keys": ["i"] } },
-            { "control": "k2", "action": { "kind": "keyboardChord", "keys": ["arrowUp"] } },
-            { "control": "k3", "action": { "kind": "keyboardChord", "keys": ["o"] } },
-            { "control": "k4", "action": { "kind": "keyboardChord", "keys": ["arrowLeft"] } },
-            { "control": "k5", "action": { "kind": "keyboardChord", "keys": ["arrowDown"] } },
-            { "control": "k6", "action": { "kind": "keyboardChord", "keys": ["arrowRight"] } },
-            { "control": "k7", "action": { "kind": "momentaryLayer", "targetLayer": 1 } },
-            { "control": "k8", "action": { "kind": "momentaryLayer", "targetLayer": 2 } },
-            { "control": "k9", "action": { "kind": "keyboardChord", "keys": ["space"] } },
-            { "control": "k10", "action": { "kind": "momentaryLayer", "targetLayer": 3 } },
-            { "control": "rollerCounterClockwise", "action": { "kind": "keyboardChord", "keys": ["arrowLeft"] } },
-            { "control": "rollerClockwise", "action": { "kind": "keyboardChord", "keys": ["arrowRight"] } }
+            {
+              "control": "k1",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "i"
+                ]
+              }
+            },
+            {
+              "control": "k2",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "arrowUp"
+                ]
+              }
+            },
+            {
+              "control": "k3",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "o"
+                ]
+              }
+            },
+            {
+              "control": "k4",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "arrowLeft"
+                ]
+              }
+            },
+            {
+              "control": "k5",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "arrowDown"
+                ]
+              }
+            },
+            {
+              "control": "k6",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "arrowRight"
+                ]
+              }
+            },
+            {
+              "control": "k7",
+              "action": {
+                "kind": "momentaryLayer",
+                "targetLayer": 1
+              }
+            },
+            {
+              "control": "k8",
+              "action": {
+                "kind": "momentaryLayer",
+                "targetLayer": 2
+              }
+            },
+            {
+              "control": "k9",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "space"
+                ]
+              }
+            },
+            {
+              "control": "k10",
+              "action": {
+                "kind": "momentaryLayer",
+                "targetLayer": 3
+              }
+            },
+            {
+              "control": "rollerClockwise",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "arrowRight"
+                ]
+              }
+            },
+            {
+              "control": "rollerCounterClockwise",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "arrowLeft"
+                ]
+              }
+            }
           ]
         },
         {
           "index": 1,
           "bindings": [
-            { "control": "k1", "action": { "kind": "keyboardChord", "keys": ["f13"] } },
-            { "control": "k2", "action": { "kind": "keyboardChord", "keys": ["v"] } },
-            { "control": "k3", "action": { "kind": "keyboardChord", "keys": ["f14"] } },
-            { "control": "k4", "action": { "kind": "keyboardChord", "keys": ["comma"] } },
-            { "control": "k5", "action": { "kind": "keyboardChord", "keys": ["u"] } },
-            { "control": "k6", "action": { "kind": "keyboardChord", "keys": ["period"] } },
-            { "control": "k7", "action": { "kind": "transparent" } },
-            { "control": "k8", "action": { "kind": "keyboardChord", "keys": ["f9"] } },
-            { "control": "k9", "action": { "kind": "keyboardChord", "keys": ["space"] } },
-            { "control": "k10", "action": { "kind": "keyboardChord", "keys": ["delete"] } },
-            { "control": "rollerCounterClockwise", "action": { "kind": "keyboardChord", "keys": ["comma"] } },
-            { "control": "rollerClockwise", "action": { "kind": "keyboardChord", "keys": ["period"] } }
+            {
+              "control": "k1",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "f13"
+                ]
+              }
+            },
+            {
+              "control": "k2",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "v"
+                ]
+              }
+            },
+            {
+              "control": "k3",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "f14"
+                ]
+              }
+            },
+            {
+              "control": "k4",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "comma"
+                ]
+              }
+            },
+            {
+              "control": "k5",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "u"
+                ]
+              }
+            },
+            {
+              "control": "k6",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "period"
+                ]
+              }
+            },
+            {
+              "control": "k7",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k8",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "f9"
+                ]
+              }
+            },
+            {
+              "control": "k9",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "space"
+                ]
+              }
+            },
+            {
+              "control": "k10",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "delete"
+                ]
+              }
+            },
+            {
+              "control": "rollerClockwise",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "period"
+                ]
+              }
+            },
+            {
+              "control": "rollerCounterClockwise",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "comma"
+                ]
+              }
+            }
           ]
         },
         {
           "index": 2,
           "bindings": [
-            { "control": "k1", "action": { "kind": "keyboardChord", "keys": ["i"] } },
-            { "control": "k2", "action": { "kind": "keyboardChord", "keys": ["arrowUp"] } },
-            { "control": "k3", "action": { "kind": "keyboardChord", "keys": ["o"] } },
-            { "control": "k4", "action": { "kind": "keyboardChord", "keys": ["q"] } },
-            { "control": "k5", "action": { "kind": "keyboardChord", "keys": ["v"] } },
-            { "control": "k6", "action": { "kind": "keyboardChord", "keys": ["f"] } },
-            { "control": "k7", "action": { "kind": "keyboardChord", "keys": ["f9"] } },
-            { "control": "k8", "action": { "kind": "transparent" } },
-            { "control": "k9", "action": { "kind": "keyboardChord", "keys": ["space"] } },
-            { "control": "k10", "action": { "kind": "keyboardChord", "keys": ["f10"] } },
-            { "control": "rollerCounterClockwise", "action": { "kind": "keyboardChord", "keys": ["arrowLeft"] } },
-            { "control": "rollerClockwise", "action": { "kind": "keyboardChord", "keys": ["arrowRight"] } }
+            {
+              "control": "k1",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "i"
+                ]
+              }
+            },
+            {
+              "control": "k2",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "arrowUp"
+                ]
+              }
+            },
+            {
+              "control": "k3",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "o"
+                ]
+              }
+            },
+            {
+              "control": "k4",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "q"
+                ]
+              }
+            },
+            {
+              "control": "k5",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "v"
+                ]
+              }
+            },
+            {
+              "control": "k6",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "f"
+                ]
+              }
+            },
+            {
+              "control": "k7",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "f9"
+                ]
+              }
+            },
+            {
+              "control": "k8",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "k9",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "space"
+                ]
+              }
+            },
+            {
+              "control": "k10",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "f10"
+                ]
+              }
+            },
+            {
+              "control": "rollerClockwise",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "arrowRight"
+                ]
+              }
+            },
+            {
+              "control": "rollerCounterClockwise",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "arrowLeft"
+                ]
+              }
+            }
           ]
         },
         {
           "index": 3,
           "bindings": [
-            { "control": "k1", "action": { "kind": "keyboardChord", "keys": ["backspace"] } },
-            { "control": "k2", "action": { "kind": "keyboardChord", "keys": ["a"] } },
-            { "control": "k3", "action": { "kind": "keyboardChord", "keys": ["delete"] } },
-            { "control": "k4", "action": { "kind": "keyboardChord", "keys": ["leftControl", "z"] } },
-            { "control": "k5", "action": { "kind": "keyboardChord", "keys": ["b"] } },
-            { "control": "k6", "action": { "kind": "keyboardChord", "keys": ["leftControl", "leftShift", "z"] } },
-            { "control": "k7", "action": { "kind": "keyboardChord", "keys": ["n"] } },
-            { "control": "k8", "action": { "kind": "keyboardChord", "keys": ["leftControl", "s"] } },
-            { "control": "k9", "action": { "kind": "keyboardChord", "keys": ["space"] } },
-            { "control": "k10", "action": { "kind": "transparent" } },
-            { "control": "rollerCounterClockwise", "action": { "kind": "keyboardChord", "keys": ["leftControl", "minus"] } },
-            { "control": "rollerClockwise", "action": { "kind": "keyboardChord", "keys": ["leftControl", "equal"] } }
+            {
+              "control": "k1",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "backspace"
+                ]
+              }
+            },
+            {
+              "control": "k2",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "a"
+                ]
+              }
+            },
+            {
+              "control": "k3",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "delete"
+                ]
+              }
+            },
+            {
+              "control": "k4",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "leftControl",
+                  "z"
+                ]
+              }
+            },
+            {
+              "control": "k5",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "b"
+                ]
+              }
+            },
+            {
+              "control": "k6",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "leftControl",
+                  "leftShift",
+                  "z"
+                ]
+              }
+            },
+            {
+              "control": "k7",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "n"
+                ]
+              }
+            },
+            {
+              "control": "k8",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "leftControl",
+                  "s"
+                ]
+              }
+            },
+            {
+              "control": "k9",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "space"
+                ]
+              }
+            },
+            {
+              "control": "k10",
+              "action": {
+                "kind": "transparent"
+              }
+            },
+            {
+              "control": "rollerClockwise",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "leftControl",
+                  "equal"
+                ]
+              }
+            },
+            {
+              "control": "rollerCounterClockwise",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": [
+                  "leftControl",
+                  "minus"
+                ]
+              }
+            }
           ]
         }
-      ]
+      ],
+      "tapHolds": [],
+      "comboDefaults": {
+        "termMs": 50
+      },
+      "combos": []
     }
   ]
 }
