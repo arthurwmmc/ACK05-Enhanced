@@ -180,7 +180,7 @@ public static partial class Ack05ConfigurationValidator
                 definition.Controls.Any(control => !Enum.IsDefined(control) ||
                     control is Ack05Control.RollerClockwise or Ack05Control.RollerCounterClockwise))
             {
-                errors.Add($"{path}: controls must contain exactly two distinct K1-K10 keys.");
+                errors.Add($"{path}: controls must contain exactly two distinct held controls (K1-K10 or RollerPress).");
             }
 
             if (definition.Layers is null ||

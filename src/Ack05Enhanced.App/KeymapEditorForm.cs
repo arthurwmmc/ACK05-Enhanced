@@ -23,6 +23,7 @@ public sealed class KeymapEditorForm : Form
         Ack05Control.K10,
         Ack05Control.RollerClockwise,
         Ack05Control.RollerCounterClockwise,
+        Ack05Control.RollerPress,
     ];
 
     private readonly ComboBox _profiles = new();
@@ -2293,10 +2294,10 @@ public sealed class KeymapEditorForm : Form
         var isPulseOnly = selectedControl is Ack05Control.RollerClockwise or
             Ack05Control.RollerCounterClockwise;
         _tapHoldMapHint.Text = isPulseOnly
-            ? "Roller directions are pulse-only. Choose K1-K10."
+            ? "Roller directions are pulse-only. Choose K1-K10 or Roller Press."
             : $"Assignment target  ·  Layer {_selectedLayer}  ·  {selectedControl}";
         _assignTapHold.Text = isPulseOnly
-            ? "Choose a K1-K10 target"
+            ? "Choose a key or Roller Press"
             : $"Assign to L{_selectedLayer}  ·  {selectedControl}";
         _assignTapHold.Enabled = !isPulseOnly;
     }
@@ -2326,7 +2327,7 @@ public sealed class KeymapEditorForm : Form
 
         if (control is Ack05Control.RollerClockwise or Ack05Control.RollerCounterClockwise)
         {
-            UpdateStatus("Tap & Hold requires K1-K10; roller directions are pulse-only.");
+            UpdateStatus("Tap & Hold requires K1-K10 or Roller Press; roller directions are pulse-only.");
             return;
         }
 
@@ -2563,7 +2564,7 @@ public sealed class KeymapEditorForm : Form
         var control = _tapHoldSelectedControl ?? CurrentControl();
         if (CurrentTapHoldDefinition() is not { } definition || control is null)
         {
-            UpdateStatus("Select a physical K1-K10 key on the Tap & Hold map first.");
+            UpdateStatus("Select K1-K10 or Roller Press on the Tap & Hold map first.");
             return;
         }
 
@@ -2682,7 +2683,7 @@ public sealed class KeymapEditorForm : Form
 
             _comboName.Text = definition.Name;
             _comboMembers.Text = $"{definition.Controls[0]}  +  {definition.Controls[1]}  ->  {DescribeAction(definition.Action)}";
-            _comboSelectionHint.Text = "Click any two K1-K10 keys to replace the input pair.";
+            _comboSelectionHint.Text = "Click any two held controls (K1-K10 or Roller Press) to replace the input pair.";
             _comboFirstSelection = null;
             _comboDeviceMap.SelectedControl = definition.Controls[0];
             _comboUseDefaultTerm.Checked = definition.TermMs is null;
@@ -2728,7 +2729,7 @@ public sealed class KeymapEditorForm : Form
     {
         if (control is Ack05Control.RollerClockwise or Ack05Control.RollerCounterClockwise)
         {
-            UpdateStatus("Combo members must be K1-K10; roller directions are pulse-only.");
+            UpdateStatus("Combo members must be K1-K10 or Roller Press; roller directions are pulse-only.");
             return;
         }
 
@@ -3410,6 +3411,7 @@ public sealed class KeymapEditorForm : Form
     {
         Ack05Control.RollerClockwise => "Roller CW",
         Ack05Control.RollerCounterClockwise => "Roller CCW",
+        Ack05Control.RollerPress => "Roller Press",
         _ => control.ToString(),
     };
 

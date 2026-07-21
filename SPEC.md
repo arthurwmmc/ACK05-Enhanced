@@ -6,6 +6,10 @@ Date: 2026-07-21
 
 ## Implemented Instrument Workbench UI slice
 
+- The hardware map exposes the roller center as `Roller Press`. It is a stateful
+  Down/Up control and supports the same leaf bindings, layer actions, Tap & Hold,
+  and Combo membership as K1-K10. Only the two rotation directions are pulse-only.
+
 - The main Keymap workspace uses a hardware-first map, a persistent right-side
   inspector for the selected control, and a bottom action library.
 - Selecting a valid action card or changing its relevant inspector parameter

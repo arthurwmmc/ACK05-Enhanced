@@ -66,7 +66,8 @@ internal sealed class Ack05DeviceMapControl : UserControl
 
         _roller.LoadActions(
             ActionFor(layer, Ack05Control.RollerCounterClockwise),
-            ActionFor(layer, Ack05Control.RollerClockwise));
+            ActionFor(layer, Ack05Control.RollerClockwise),
+            ActionFor(layer, Ack05Control.RollerPress));
         LoadComboBadges(profile, layerIndex, showCombos);
         UpdateSelection();
     }
@@ -79,6 +80,7 @@ internal sealed class Ack05DeviceMapControl : UserControl
         {
             pair.Value.IsComboHighlighted = highlighted.Contains(pair.Key);
         }
+        _roller.IsComboHighlighted = highlighted.Contains(Ack05Control.RollerPress);
     }
 
     private void BuildLayout()
@@ -232,16 +234,16 @@ internal sealed class Ack05DeviceMapControl : UserControl
         var occupied = new List<Rectangle>();
         foreach (var badge in _comboBadges)
         {
-            if (!_buttons.TryGetValue(badge.MemberControls[0], out var first) ||
-                !_buttons.TryGetValue(badge.MemberControls[1], out var second))
+            if (!TryGetControlBounds(badge.MemberControls[0], out var first) ||
+                !TryGetControlBounds(badge.MemberControls[1], out var second))
             {
                 badge.Visible = false;
                 continue;
             }
 
             badge.Visible = true;
-            var firstCenter = CenterOf(first.Bounds);
-            var secondCenter = CenterOf(second.Bounds);
+            var firstCenter = CenterOf(first);
+            var secondCenter = CenterOf(second);
             var midpoint = new Point(
                 (firstCenter.X + secondCenter.X) / 2,
                 (firstCenter.Y + secondCenter.Y) / 2);
@@ -289,13 +291,17 @@ internal sealed class Ack05DeviceMapControl : UserControl
             {
                 button.IsComboHighlighted = true;
             }
+            else if (control == Ack05Control.RollerPress)
+            {
+                _roller.IsComboHighlighted = true;
+            }
         }
 
         if (controls.Length == 2 &&
-            _buttons.TryGetValue(controls[0], out var first) &&
-            _buttons.TryGetValue(controls[1], out var second))
+            TryGetControlBounds(controls[0], out var first) &&
+            TryGetControlBounds(controls[1], out var second))
         {
-            _surface.ComboConnector = (CenterOf(first.Bounds), CenterOf(second.Bounds));
+            _surface.ComboConnector = (CenterOf(first), CenterOf(second));
         }
     }
 
@@ -305,7 +311,26 @@ internal sealed class Ack05DeviceMapControl : UserControl
         {
             button.IsComboHighlighted = false;
         }
+        _roller.IsComboHighlighted = false;
         _surface.ComboConnector = null;
+    }
+
+    private bool TryGetControlBounds(Ack05Control control, out Rectangle bounds)
+    {
+        if (_buttons.TryGetValue(control, out var button))
+        {
+            bounds = button.Bounds;
+            return true;
+        }
+
+        if (control == Ack05Control.RollerPress)
+        {
+            bounds = _roller.CenterBoundsInParent;
+            return true;
+        }
+
+        bounds = Rectangle.Empty;
+        return false;
     }
 
     private static Point CenterOf(Rectangle bounds) =>
@@ -773,7 +798,9 @@ internal sealed class Ack05DeviceMapControl : UserControl
         private readonly ToolTip _toolTip = new();
         private Ack05Action _counterClockwise = Ack05Action.Disabled();
         private Ack05Action _clockwise = Ack05Action.Disabled();
+        private Ack05Action _press = Ack05Action.Disabled();
         private Ack05Control? _selectedControl;
+        private bool _isComboHighlighted;
 
         internal Ack05RollerControl()
         {
@@ -789,9 +816,9 @@ internal sealed class Ack05DeviceMapControl : UserControl
             Cursor = Cursors.Hand;
             TabStop = true;
             AccessibleRole = AccessibleRole.PushButton;
-            AccessibleName = "Roller directions";
-            AccessibleDescription = "Use Left and Right Arrow to select counter-clockwise or clockwise rotation.";
-            _toolTip.SetToolTip(this, "Turn left/right to select its binding. Center switch report bit is pending.");
+            AccessibleName = "Roller directions and center switch";
+            AccessibleDescription = "Use Left, Right, or Down Arrow to select counter-clockwise, clockwise, or center press.";
+            _toolTip.SetToolTip(this, "Turn left/right or press the center to select its binding.");
         }
 
         internal event Action<Ack05Control>? ControlSelected;
@@ -811,10 +838,39 @@ internal sealed class Ack05DeviceMapControl : UserControl
             }
         }
 
-        internal void LoadActions(Ack05Action counterClockwise, Ack05Action clockwise)
+        internal bool IsComboHighlighted
+        {
+            get => _isComboHighlighted;
+            set
+            {
+                if (_isComboHighlighted == value)
+                {
+                    return;
+                }
+
+                _isComboHighlighted = value;
+                Invalidate();
+            }
+        }
+
+        internal Rectangle CenterBoundsInParent
+        {
+            get
+            {
+                var bounds = CenterBounds();
+                bounds.Offset(Left, Top);
+                return bounds;
+            }
+        }
+
+        internal void LoadActions(
+            Ack05Action counterClockwise,
+            Ack05Action clockwise,
+            Ack05Action press)
         {
             _counterClockwise = counterClockwise;
             _clockwise = clockwise;
+            _press = press;
             Invalidate();
         }
 
@@ -828,7 +884,9 @@ internal sealed class Ack05DeviceMapControl : UserControl
             var dy = e.Y - center.Y;
             if ((dx * dx) + (dy * dy) <= centerRadius * centerRadius)
             {
-                _toolTip.Show("Roller center switch: report bit is not verified yet.", this, e.Location, 1400);
+                SelectedControl = Ack05Control.RollerPress;
+                ControlSelected?.Invoke(Ack05Control.RollerPress);
+                base.OnMouseClick(e);
                 return;
             }
 
@@ -841,7 +899,7 @@ internal sealed class Ack05DeviceMapControl : UserControl
         }
 
         protected override bool IsInputKey(Keys keyData) =>
-            keyData is Keys.Left or Keys.Right || base.IsInputKey(keyData);
+            keyData is Keys.Left or Keys.Right or Keys.Down || base.IsInputKey(keyData);
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
@@ -849,6 +907,7 @@ internal sealed class Ack05DeviceMapControl : UserControl
             {
                 Keys.Left => Ack05Control.RollerCounterClockwise,
                 Keys.Right => Ack05Control.RollerClockwise,
+                Keys.Down => Ack05Control.RollerPress,
                 Keys.Enter or Keys.Space => _selectedControl ?? Ack05Control.RollerClockwise,
                 _ => (Ack05Control?)null,
             };
@@ -890,6 +949,26 @@ internal sealed class Ack05DeviceMapControl : UserControl
             e.Graphics.FillEllipse(innerFill, inner);
             e.Graphics.DrawEllipse(innerBorder, inner);
 
+            if (_selectedControl == Ack05Control.RollerPress || _isComboHighlighted)
+            {
+                using var centerSelection = new Pen(Accent, _isComboHighlighted ? 4F : 3F);
+                e.Graphics.DrawEllipse(centerSelection, Rectangle.Inflate(inner, -2, -2));
+            }
+
+            using var pressFont = new Font(
+                FontFamily.GenericSansSerif,
+                Math.Clamp(inner.Height / 8F, 7F, 9F),
+                FontStyle.Bold,
+                GraphicsUnit.Pixel);
+            var pressText = CompactAction(_press);
+            TextRenderer.DrawText(
+                e.Graphics,
+                _press.Kind == Ack05ActionKind.Disabled ? "PRESS" : pressText,
+                pressFont,
+                inner,
+                InstrumentTheme.Ink,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
             DrawDirection(
                 e.Graphics,
                 new Rectangle(circle.Left + circle.Width / 12, circle.Bottom - circle.Height / 4, circle.Width * 5 / 12, circle.Height / 6),
@@ -919,6 +998,15 @@ internal sealed class Ack05DeviceMapControl : UserControl
         {
             var size = Math.Max(1, Math.Min(Width - 2, Height - 2));
             return new Rectangle((Width - size) / 2, (Height - size) / 2, size, size);
+        }
+
+        private Rectangle CenterBounds()
+        {
+            var circle = DialBounds();
+            return Rectangle.Inflate(
+                circle,
+                -(int)(circle.Width * 0.32),
+                -(int)(circle.Height * 0.32));
         }
 
         private static void DrawDirection(

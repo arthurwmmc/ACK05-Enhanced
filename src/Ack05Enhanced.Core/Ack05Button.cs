@@ -12,6 +12,7 @@ public enum Ack05Button
     K8 = 7,
     K9 = 8,
     K10 = 9,
+    RollerPress = 10,
 }
 
 public enum Ack05Control
@@ -28,6 +29,7 @@ public enum Ack05Control
     K10 = 9,
     RollerClockwise = 10,
     RollerCounterClockwise = 11,
+    RollerPress = 12,
 }
 
 public enum RollerPulse

@@ -49,12 +49,12 @@ Raw input report layout observed by those implementations:
 byte 0: 0x02  vendor report ID
 byte 1: 0xF0  raw pad report marker
 byte 2: bit 0..7 = K1..K8 held state
-byte 3: bit 0..1 = K9..K10 held state
+byte 3: bit 0..1 = K9..K10 held state; bit 2 = roller center switch held state
 byte 4..6: not used by current decoder
 byte 7: 0x01 clockwise pulse, 0x02 counter-clockwise pulse
 ```
 
-The ten key bits are stateful, so press and release transitions can be derived by
+The ten key bits and roller-center bit are stateful, so press and release transitions can be derived by
 comparing consecutive reports. Roller values are stateless pulses.
 
 ## Connection matrix
@@ -101,6 +101,14 @@ Holding K1 while tapping K2-K10 produced the expected combined state masks, and
 all routed events stayed on Layer 1 until K1 was released. Disconnecting USB while
 K2 was held ended the input stream with a Windows device-disconnected error after
 repeated held-state reports.
+
+## Windows roller-center observation: 2026-07-21
+
+With the same wired vendor collection and documented raw-mode command, five
+roller-center presses consistently produced `02 F0 00 04 ...` while held and
+`02 F0 00 00 ...` on release. No rotation or K1-K10 input was used during the
+capture. This verifies byte 3 bit 2 as a stateful roller-center switch on the
+tested Windows USB-C device; it is not an inference from Linux or Bluetooth.
 
 ## Windows direct Bluetooth observation: 2026-07-16
 

@@ -11,7 +11,8 @@ public sealed class Ack05TransitionTracker
         var events = new List<PhysicalInputEvent>();
         var changed = (ushort)(_previousHeldButtons ^ snapshot.HeldButtons);
 
-        for (var index = 0; index < 10; index++)
+        var buttons = Enum.GetValues<Ack05Button>();
+        for (var index = 0; index < buttons.Length; index++)
         {
             var bit = (ushort)(1 << index);
             if ((changed & bit) == 0)
@@ -22,7 +23,10 @@ public sealed class Ack05TransitionTracker
             var type = (snapshot.HeldButtons & bit) != 0
                 ? PhysicalEventType.Down
                 : PhysicalEventType.Up;
-            events.Add(new PhysicalInputEvent((Ack05Control)index, type));
+            var control = buttons[index] == Ack05Button.RollerPress
+                ? Ack05Control.RollerPress
+                : (Ack05Control)index;
+            events.Add(new PhysicalInputEvent(control, type));
         }
 
         if (snapshot.Roller == RollerPulse.Clockwise)

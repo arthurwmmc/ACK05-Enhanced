@@ -1219,3 +1219,44 @@ menu behavior are unchanged.
 
 Remove the compact selector/menu and responsive-mode method. No saved data or
 configuration migration is involved.
+
+## 2026-07-21: Treat the verified roller center as a stateful assignable control
+
+### Background
+
+The editor showed the roller center as pending because its raw-report position
+had not been verified. A wired Windows capture now shows byte 3 bit 2 set while
+the center is held and cleared on release across repeated isolated presses.
+
+### Options
+
+1. Keep the center unavailable despite the hardware evidence.
+2. Expose it only as a simple keymap binding.
+3. Model it as a normal stateful control available to keymap, layers, Tap & Hold,
+   and Combos while keeping rotation directions pulse-only.
+
+### Decision
+
+Use option 3 and name the persisted control `RollerPress`. Preserve the numeric
+values of existing `Ack05Control` members and append the new value. Older profiles
+are normalized with a disabled binding, so the schema version does not change.
+
+### Reason
+
+The verified report supplies distinct Down and Up transitions, which satisfy the
+same lifecycle and cancellation guarantees as K1-K10. Restricting the control to
+tap-only behavior would discard verified capability and create an unnecessary
+special case.
+
+### Impact
+
+The center can hold keyboard output or a momentary layer and can participate in
+Tap & Hold and exactly-two-control Combos. Disconnect, profile replacement,
+Output OFF, and shutdown use the existing release paths. Direct Bluetooth and the
+bundled receiver remain unverified.
+
+### Rollback
+
+Remove `RollerPress` from the enums, decoder mask, transition mapping, editor map,
+and normalization. Existing JSON files that saved `RollerPress` would then need
+manual removal before loading, so rollback after release requires a migration.

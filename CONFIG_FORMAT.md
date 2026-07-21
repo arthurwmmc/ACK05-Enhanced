@@ -69,7 +69,8 @@ This example keeps K1 as MO(1), while K2 taps B and holds Left Shift.
 ## Combo definitions
 
 - `comboDefaults.termMs` is the profile recognition window, 20-200 ms; default 50 ms.
-- A definition contains exactly two distinct K1-K10 `controls`. Roller pulses are rejected.
+- A definition contains exactly two distinct held `controls`: K1-K10 or
+  `rollerPress`. The two roller-direction pulses are rejected.
 - `layers` contains one or more unique existing layer indices. The active layer is
   captured at the first member Down and selects eligible definitions.
 - Omitted/null `termMs` uses the profile default; otherwise it is 20-200 ms.
@@ -99,7 +100,8 @@ This example keeps K1 as MO(1), while K2 taps B and holds Left Shift.
 - `transparent` falls through to the next active lower layer.
 - A missing binding is interpreted as `disabled` on Layer 0 and `transparent`
   on upper layers. The GUI writes explicit bindings for clarity.
-- K1-K10 and both roller directions are assignable. No key is globally reserved.
+- K1-K10, `rollerPress`, and both roller directions are assignable. No key is
+  globally reserved. `rollerPress` has Down/Up semantics; rotation is pulse-only.
 - A control may appear at most once per layer.
 
 ## Actions

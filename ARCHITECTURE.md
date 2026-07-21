@@ -126,6 +126,11 @@ Transport identifies `VID 0x28BD / PID 0x0202 / usage page 0xFF0A / usage
 0x0001`. Raw-mode writes are restricted to the documented command and remain an
 explicit opt-in. Firmware, pairing, drivers, and HidHide are outside the process.
 
+The raw held-state mask contains K1-K10 plus the roller center switch. Core maps
+the center switch to `RollerPress` with Down/Up transitions; clockwise and
+counter-clockwise values remain stateless pulse controls. Configuration migration
+adds a disabled `RollerPress` binding to older profiles without changing schema.
+
 Direct Bluetooth currently exposes standard collections but has not provided the
 device-identified physical key-state stream needed by the layer router. The
 transport interface remains replaceable without changing layer semantics.

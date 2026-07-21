@@ -11,7 +11,7 @@ dotnet run --project .\src\Ack05Enhanced.Probe -c Release -- decode 02-F0-03-00-
 Expected:
 
 - Build succeeds with zero warnings.
-- Parser identifies every K1-K10 bit and both roller directions.
+- Parser identifies every K1-K10 bit, the roller-center held bit, and both roller directions.
 - K1 hold routes K2 down/up through Layer 1 even if K1 is released first.
 - Malformed and non-raw reports are rejected.
 - A simulated disconnect resets held Layer 1 inputs, disposes the source, and
@@ -34,15 +34,16 @@ Steps:
 3. Run `probe monitor` and press each key once. Confirm no device write occurs.
 4. Stop monitor.
 5. Run `probe monitor --enable-bitmask` after reading the confirmation text.
-6. Press/release K1-K10 individually, then K1+each other key.
+6. Press/release K1-K10 and the roller center individually, then K1+each other held control.
 7. Rotate one detent clockwise and counter-clockwise.
-8. Disconnect while K2 is held; confirm probe exits or reports disconnect cleanly.
+8. Assign a keyboard action to Roller Press and verify one Down/Up output cycle.
+9. Disconnect while Roller Press is held; confirm its output is released and the probe exits cleanly.
 
 Pass criteria:
 
 - One vendor collection matches `FF0A/0001`.
 - Raw report has marker `02 F0` and bit positions match the research table.
-- Every physical key emits down and up.
+- Every physical key and the roller center emit down and up.
 - Wheel direction is consistent.
 - No firmware, pairing, or XPPen profile is changed after reconnect.
 

@@ -34,6 +34,11 @@
 
 ### Added
 
+- Hardware-verified roller-center press input. The center switch is now a stateful
+  `RollerPress` control with normal Down/Up semantics, editable keymap bindings,
+  Tap & Hold assignment, and Combo membership. Existing configuration files load
+  unchanged and receive a disabled center binding during normalization.
+
 - Public-source README, MIT license, contribution guidance, and a documented
   follow-up to publish a Japanese note article after the first preview release.
 - Map-first Tap & Hold workspace with a compact current-layer ACK05 map, direct

@@ -67,13 +67,14 @@ return failed == 0 ? 0 : 1;
 
 static void RawReportDecoder()
 {
-    var report = new byte[] { 0x02, 0xF0, 0x03, 0x02, 0, 0, 0, 0x01 };
+    var report = new byte[] { 0x02, 0xF0, 0x03, 0x06, 0, 0, 0, 0x01 };
     Assert(
         Ack05RawReportDecoder.TryDecode(report, out var snapshot, out var error),
         error ?? "decode failed");
     Assert(snapshot.IsHeld(Ack05Button.K1), "K1 should be held");
     Assert(snapshot.IsHeld(Ack05Button.K2), "K2 should be held");
     Assert(snapshot.IsHeld(Ack05Button.K10), "K10 should be held");
+    Assert(snapshot.IsHeld(Ack05Button.RollerPress), "roller press should be held");
     Assert(!snapshot.IsHeld(Ack05Button.K9), "K9 should not be held");
     Assert(snapshot.Roller == RollerPulse.Clockwise, "roller should be clockwise");
 
@@ -133,20 +134,23 @@ static void AllKeyBitMapping()
 static void PhysicalTransitionTracking()
 {
     var tracker = new Ack05TransitionTracker();
-    var down = tracker.Apply(new Ack05Snapshot(0x0003, RollerPulse.Clockwise));
+    var down = tracker.Apply(new Ack05Snapshot(0x0403, RollerPulse.Clockwise));
 
-    Assert(down.Count == 3, "expected K1 down, K2 down, and roller pulse");
+    Assert(down.Count == 4, "expected K1 down, K2 down, roller press, and roller pulse");
     Assert(down[0] == new PhysicalInputEvent(Ack05Control.K1, PhysicalEventType.Down), "K1 down missing");
     Assert(down[1] == new PhysicalInputEvent(Ack05Control.K2, PhysicalEventType.Down), "K2 down missing");
     Assert(
-        down[2] == new PhysicalInputEvent(Ack05Control.RollerClockwise, PhysicalEventType.Pulse),
+        down[2] == new PhysicalInputEvent(Ack05Control.RollerPress, PhysicalEventType.Down),
+        "roller press down missing");
+    Assert(
+        down[3] == new PhysicalInputEvent(Ack05Control.RollerClockwise, PhysicalEventType.Pulse),
         "roller pulse missing");
 
-    var unchanged = tracker.Apply(new Ack05Snapshot(0x0003, RollerPulse.None));
+    var unchanged = tracker.Apply(new Ack05Snapshot(0x0403, RollerPulse.None));
     Assert(unchanged.Count == 0, "unchanged held state should emit no events");
 
     var up = tracker.Apply(new Ack05Snapshot(0, RollerPulse.None));
-    Assert(up.Count == 2, "expected two key-up events");
+    Assert(up.Count == 3, "expected three key-up events");
     Assert(up.All(item => item.Type == PhysicalEventType.Up), "reset should emit only up events");
 }
 
@@ -443,8 +447,8 @@ static void DefaultConfigurationRoundTrip()
     Assert(restored.Profiles[0].Layers.Length == 4, "default profile should have four layers");
     Assert(
         restored.Profiles[0].Layers.All(layer =>
-            layer.Bindings.Length == 12),
-        "default layers should contain all twelve assignable controls");
+            layer.Bindings.Length == 13),
+        "default layers should contain all thirteen assignable controls");
     var k1 = restored.Profiles[0].Layers[0].Bindings.Single(binding => binding.Control == Ack05Control.K1);
     Assert(k1.Action.Kind == Ack05ActionKind.MomentaryLayer && k1.Action.TargetLayer == 1,
         "default K1 should use MO(1)");
@@ -1125,8 +1129,16 @@ static void ComboConfigurationAndValidation()
         CloneCombo(profile.Combos.Single(), controls: [Ack05Control.K1, Ack05Control.RollerClockwise]),
     ]);
     Assert(Ack05ConfigurationValidator.Validate(new Ack05Configuration { Profiles = [invalid] })
-        .Any(error => error.Contains("K1-K10", StringComparison.Ordinal)),
+        .Any(error => error.Contains("held controls", StringComparison.Ordinal)),
         "roller Combo members must be rejected");
+
+    var rollerPressCombo = CloneComboProfile(profile,
+    [
+        CloneCombo(profile.Combos.Single(), controls: [Ack05Control.K1, Ack05Control.RollerPress]),
+    ]);
+    Assert(
+        Ack05ConfigurationValidator.Validate(new Ack05Configuration { Profiles = [rollerPressCombo] }).Count == 0,
+        "roller press should be accepted as a stateful Combo member");
 }
 
 static void ComboPressLifecycleAndFallback()

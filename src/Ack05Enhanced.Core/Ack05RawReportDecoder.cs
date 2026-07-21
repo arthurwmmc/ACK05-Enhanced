@@ -25,7 +25,7 @@ public static class Ack05RawReportDecoder
             return false;
         }
 
-        var heldButtons = (ushort)(report[2] | ((report[3] & 0x03) << 8));
+        var heldButtons = (ushort)(report[2] | ((report[3] & 0x07) << 8));
         var roller = report[7] switch
         {
             0x00 => RollerPulse.None,
