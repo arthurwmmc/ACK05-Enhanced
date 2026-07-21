@@ -1,0 +1,33 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-self-test:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\Ack05Enhanced.sln
+
+      - name: Build Release
+        run: dotnet build .\Ack05Enhanced.sln -c Release --no-restore
+
+      - name: Run deterministic self-tests
+        run: dotnet run --project .\tests\Ack05Enhanced.SelfTest -c Release --no-build

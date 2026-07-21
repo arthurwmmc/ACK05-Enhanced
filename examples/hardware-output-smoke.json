@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "defaultProfileId": "hardware-smoke",
+  "profiles": [
+    {
+      "id": "hardware-smoke",
+      "name": "Hardware output smoke test",
+      "layers": [
+        {
+          "index": 0,
+          "bindings": [
+            {
+              "control": "k2",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": ["f24"]
+              }
+            },
+            {
+              "control": "rollerClockwise",
+              "action": {
+                "kind": "mouseWheel",
+                "wheelSteps": 1
+              }
+            },
+            {
+              "control": "rollerCounterClockwise",
+              "action": {
+                "kind": "mouseWheel",
+                "wheelSteps": -1
+              }
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "bindings": [
+            {
+              "control": "k2",
+              "action": {
+                "kind": "keyboardChord",
+                "keys": ["leftShift", "f24"]
+              }
+            },
+            {
+              "control": "rollerClockwise",
+              "action": {
+                "kind": "mouseWheel",
+                "wheelSteps": 2
+              }
+            },
+            {
+              "control": "rollerCounterClockwise",
+              "action": {
+                "kind": "mouseWheel",
+                "wheelSteps": -2
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

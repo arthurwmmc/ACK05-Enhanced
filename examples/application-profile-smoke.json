@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "defaultProfileId": "default",
+  "profiles": [
+    {
+      "id": "default",
+      "name": "Default fallback",
+      "layers": [
+        { "index": 0, "bindings": [] },
+        { "index": 1, "bindings": [] }
+      ]
+    },
+    {
+      "id": "chrome",
+      "name": "Chrome foreground test",
+      "applicationMatch": {
+        "processName": "chrome.exe"
+      },
+      "layers": [
+        { "index": 0, "bindings": [] },
+        { "index": 1, "bindings": [] }
+      ]
+    }
+  ]
+}

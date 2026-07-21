@@ -1,0 +1,21 @@
+bin/
+obj/
+.vs/
+.vscode/
+TestResults/
+artifacts/
+*.user
+*.suo
+*.log
+captures/private/
+captures/*.pcapng
+captures/*.pcap
+
+# Personal working configurations. Keep shareable fixtures under examples/.
+/ack05-config.json
+/ack05-config.json.bak
+/ack05-config.json.*.tmp
+/examples/ack05-config.json
+/examples/ack05-config.json.bak
+/examples/ack05-config.json.*.tmp
+/examples/*.bak
