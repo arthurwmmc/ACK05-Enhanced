@@ -54,6 +54,20 @@ adapter suppresses duplicate Down and unknown Up events as a second safety bound
 `run` requires both `--enable-bitmask` and `--allow-sendinput`; neither device write
 nor synthetic output is enabled by the read-only commands.
 
+Open Target is a one-shot shell action, not held input. GUI execution is gated by
+Output ON and its first-use warning. Probe `run` additionally requires
+`--allow-target-launch`; without it, target events are reported and ignored.
+Target launch failure is non-fatal and never clears or corrupts the pressed-key
+registry. Reset cannot undo a launched process, file, folder, or URL, so imported
+configurations must be reviewed before enabling output.
+
+An open Radial Menu has no output until the activation input is released with a
+selection. Escape, Output OFF, disconnect, profile/config replacement, reset, and
+shutdown cancel the menu before any segment action is emitted. Navigation inputs
+are consumed while the menu is open. Preview is presentation-only and never emits
+an action. If activation Up is missing, session reset closes the menu without
+executing the highlighted segment.
+
 ## Hardware verification
 
 Real Windows SendInput was verified with F24 and Shift+F24 chords plus signed wheel
@@ -64,7 +78,7 @@ reported panic release complete in both safety paths.
 No startup execution or GUI panic button exists yet.
 
 Working-draft recovery stores configuration JSON only. It never restores a Live
-session, pressed-key registry, active layer, pending Tap & Hold/Combo timer, or any
+session, pressed-key registry, active layer, pending Tap & Hold/Combo/Radial timer, or any
 synthetic output state. Restoring a draft therefore always starts with Live off and
 the normal Layer 0 runtime baseline.
 

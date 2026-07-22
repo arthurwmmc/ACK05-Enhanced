@@ -12,11 +12,14 @@ public sealed class Ack05KeymapLayerRouter
     private readonly HashSet<int> _toggledLayers = new();
     private readonly IReadOnlyDictionary<string, Ack05TapHoldDefinition> _tapHolds;
     private readonly Ack05ComboDefinition[] _combos;
+    private readonly IReadOnlyDictionary<Ack05Control, Ack05RadialMenuDefinition> _radialMenus;
     private readonly int _comboDefaultTermMs;
     private readonly List<ActiveCombo> _activeCombos = [];
     private readonly Func<DateTimeOffset> _now;
     private readonly int _layerCount;
     private PendingCombo? _pendingCombo;
+    private PendingRadialMenu? _pendingRadialMenu;
+    private ActiveRadialMenu? _activeRadialMenu;
 
     public Ack05KeymapLayerRouter(Ack05Profile profile, Func<DateTimeOffset>? now = null)
     {
@@ -32,6 +35,8 @@ public sealed class Ack05KeymapLayerRouter
             definition => definition.Id,
             StringComparer.OrdinalIgnoreCase);
         _combos = profile.Combos;
+        _radialMenus = profile.RadialMenus.ToDictionary(
+            definition => definition.ActivationControl);
         _comboDefaultTermMs = profile.ComboDefaults.TermMs;
         _now = now ?? (() => DateTimeOffset.UtcNow);
     }
@@ -63,8 +68,17 @@ public sealed class Ack05KeymapLayerRouter
             events.AddRange(FailPendingCombo());
         }
 
-        events.AddRange(RouteResolved(input, occurredAt));
+        events.AddRange(RouteAfterCombo(input, occurredAt));
         return events;
+    }
+
+    private IReadOnlyList<LayerRoutedEvent> RouteAfterCombo(
+        PhysicalInputEvent input,
+        DateTimeOffset occurredAt)
+    {
+        return TryRouteRadialMenu(input, occurredAt, out var radialEvents)
+            ? radialEvents
+            : RouteResolved(input, occurredAt);
     }
 
     private IReadOnlyList<LayerRoutedEvent> RouteResolved(
@@ -105,6 +119,7 @@ public sealed class Ack05KeymapLayerRouter
     {
         var events = new List<LayerRoutedEvent>();
         events.AddRange(TickCombo());
+        events.AddRange(TickRadialMenu());
         events.AddRange(TickTapHolds());
         return events;
     }
@@ -132,6 +147,7 @@ public sealed class Ack05KeymapLayerRouter
     {
         var previousLayer = ActiveLayer;
         var events = new List<LayerRoutedEvent>();
+        events.AddRange(CancelRadialMenu());
         foreach (var combo in _activeCombos.ToArray())
         {
             events.AddRange(StopComboOutput(combo));
@@ -169,6 +185,144 @@ public sealed class Ack05KeymapLayerRouter
         return events;
     }
 
+    public IReadOnlyList<LayerRoutedEvent> CancelRadialMenu()
+    {
+        _pendingRadialMenu = null;
+        if (_activeRadialMenu is not { } active)
+        {
+            return [];
+        }
+
+        _activeRadialMenu = null;
+        return [RadialMenuChange(active.Definition, selectedIndex: -1, isOpen: false)];
+    }
+
+    private bool TryRouteRadialMenu(
+        PhysicalInputEvent input,
+        DateTimeOffset occurredAt,
+        out IReadOnlyList<LayerRoutedEvent> events)
+    {
+        if (_activeRadialMenu is { } active)
+        {
+            if (input.Control == active.Definition.ActivationControl)
+            {
+                events = input.Type == PhysicalEventType.Up
+                    ? CompleteRadialMenu(active)
+                    : [];
+                return true;
+            }
+
+            var direction = input.Control == active.Definition.ForwardControl
+                ? 1
+                : input.Control == active.Definition.BackwardControl ? -1 : 0;
+            if (direction != 0)
+            {
+                events = input.Type is PhysicalEventType.Down or PhysicalEventType.Pulse
+                    ? NavigateRadialMenu(active, direction)
+                    : [];
+                return true;
+            }
+        }
+
+        if (_pendingRadialMenu is { } pending &&
+            input.Control == pending.Definition.ActivationControl)
+        {
+            if (input.Type == PhysicalEventType.Up)
+            {
+                _pendingRadialMenu = null;
+                var replay = new List<LayerRoutedEvent>();
+                replay.AddRange(RouteResolved(
+                    new PhysicalInputEvent(input.Control, PhysicalEventType.Down),
+                    pending.PressedAt));
+                replay.AddRange(RouteResolved(input, occurredAt));
+                events = replay;
+            }
+            else
+            {
+                events = [];
+            }
+
+            return true;
+        }
+
+        if (_activeRadialMenu is null &&
+            _pendingRadialMenu is null &&
+            input.Type == PhysicalEventType.Down &&
+            _radialMenus.TryGetValue(input.Control, out var definition))
+        {
+            _pendingRadialMenu = new PendingRadialMenu(definition, occurredAt, ActiveLayer);
+            events = [];
+            return true;
+        }
+
+        events = [];
+        return false;
+    }
+
+    private IReadOnlyList<LayerRoutedEvent> TickRadialMenu()
+    {
+        if (_pendingRadialMenu is not { } pending ||
+            _now() - pending.PressedAt <
+                TimeSpan.FromMilliseconds(pending.Definition.HoldThresholdMs))
+        {
+            return [];
+        }
+
+        var active = new ActiveRadialMenu(pending.Definition, pending.Layer);
+        _pendingRadialMenu = null;
+        _activeRadialMenu = active;
+        return [RadialMenuChange(active.Definition, active.SelectedIndex, isOpen: true)];
+    }
+
+    private IReadOnlyList<LayerRoutedEvent> NavigateRadialMenu(
+        ActiveRadialMenu active,
+        int direction)
+    {
+        active.NavigationPulses++;
+        if (active.NavigationPulses < active.Definition.NavigationStep)
+        {
+            return [];
+        }
+
+        active.NavigationPulses = 0;
+        var count = active.Definition.Segments.Length;
+        active.SelectedIndex = active.SelectedIndex < 0
+            ? direction > 0 ? 0 : count - 1
+            : (active.SelectedIndex + direction + count) % count;
+        return [RadialMenuChange(active.Definition, active.SelectedIndex, isOpen: true)];
+    }
+
+    private IReadOnlyList<LayerRoutedEvent> CompleteRadialMenu(ActiveRadialMenu active)
+    {
+        _activeRadialMenu = null;
+        var events = new List<LayerRoutedEvent>
+        {
+            RadialMenuChange(active.Definition, selectedIndex: -1, isOpen: false),
+        };
+        if (active.SelectedIndex < 0)
+        {
+            return events;
+        }
+
+        var action = active.Definition.Segments[active.SelectedIndex].Action;
+        if (action.Kind == Ack05ActionKind.ToggleLayer)
+        {
+            events.AddRange(ToggleLayer(
+                active.Definition.ActivationControl,
+                action.TargetLayer!.Value));
+        }
+        else if (action.Kind != Ack05ActionKind.Disabled)
+        {
+            events.Add(Input(
+                active.Definition.ActivationControl,
+                PhysicalEventType.Pulse,
+                active.Layer,
+                action));
+        }
+
+        return events;
+    }
+
     private IReadOnlyList<LayerRoutedEvent> RouteCombo(
         PhysicalInputEvent input,
         DateTimeOffset occurredAt)
@@ -177,7 +331,7 @@ public sealed class Ack05KeymapLayerRouter
         {
             if (input.Type != PhysicalEventType.Down)
             {
-                return RouteResolved(input, occurredAt);
+                return RouteAfterCombo(input, occurredAt);
             }
 
             var layer = ActiveLayer;
@@ -188,7 +342,7 @@ public sealed class Ack05KeymapLayerRouter
                 .ToArray();
             if (candidates.Length == 0)
             {
-                return RouteResolved(input, occurredAt);
+                return RouteAfterCombo(input, occurredAt);
             }
 
             _pendingCombo = new PendingCombo(
@@ -216,7 +370,7 @@ public sealed class Ack05KeymapLayerRouter
             if (matches.Length != 1)
             {
                 var failed = new List<LayerRoutedEvent>(FailPendingCombo());
-                failed.AddRange(RouteResolved(input, occurredAt));
+                failed.AddRange(RouteAfterCombo(input, occurredAt));
                 return failed;
             }
 
@@ -230,7 +384,7 @@ public sealed class Ack05KeymapLayerRouter
         if (!pending.DownControls.Contains(input.Control))
         {
             var failed = new List<LayerRoutedEvent>(FailPendingCombo());
-            failed.AddRange(RouteResolved(input, occurredAt));
+            failed.AddRange(RouteAfterCombo(input, occurredAt));
             return failed;
         }
 
@@ -369,6 +523,8 @@ public sealed class Ack05KeymapLayerRouter
                 [Input(combo.Owner, PhysicalEventType.Down, combo.Layer, action)],
             Ack05ActionKind.MouseWheel =>
                 [Input(combo.Owner, PhysicalEventType.Pulse, combo.Layer, action)],
+            Ack05ActionKind.OpenTarget =>
+                [Input(combo.Owner, PhysicalEventType.Pulse, combo.Layer, action)],
             Ack05ActionKind.MomentaryLayer =>
                 ChangeMomentary(combo.Owner, action.TargetLayer!.Value, 1),
             Ack05ActionKind.ToggleLayer =>
@@ -405,7 +561,8 @@ public sealed class Ack05KeymapLayerRouter
         return action.Kind switch
         {
             Ack05ActionKind.Disabled => [],
-            Ack05ActionKind.KeyboardChord or Ack05ActionKind.MouseWheel =>
+            Ack05ActionKind.KeyboardChord or Ack05ActionKind.MouseWheel or
+                Ack05ActionKind.OpenTarget =>
                 [Input(owner, PhysicalEventType.Pulse, layer, action)],
             Ack05ActionKind.MomentaryLayer =>
                 [.. ChangeMomentary(owner, action.TargetLayer!.Value, 1),
@@ -534,7 +691,8 @@ public sealed class Ack05KeymapLayerRouter
         return action.Kind switch
         {
             Ack05ActionKind.Disabled => Array.Empty<LayerRoutedEvent>(),
-            Ack05ActionKind.KeyboardChord or Ack05ActionKind.MouseWheel =>
+            Ack05ActionKind.KeyboardChord or Ack05ActionKind.MouseWheel or
+                Ack05ActionKind.OpenTarget =>
                 new[] { Input(control, PhysicalEventType.Pulse, press.Layer, action) },
             Ack05ActionKind.ToggleLayer =>
                 ToggleLayer(control, action.TargetLayer!.Value),
@@ -734,6 +892,24 @@ public sealed class Ack05KeymapLayerRouter
     private static LayerRoutedEvent LayerChange(Ack05Control control, int layer) =>
         new(LayerRouteKind.LayerChanged, control, PhysicalEventType.Pulse, layer);
 
+    private static LayerRoutedEvent RadialMenuChange(
+        Ack05RadialMenuDefinition definition,
+        int selectedIndex,
+        bool isOpen) =>
+        new(
+            LayerRouteKind.RadialMenuChanged,
+            definition.ActivationControl,
+            PhysicalEventType.Pulse,
+            0,
+            RadialMenu: new Ack05RadialMenuState(
+                isOpen,
+                definition.Id,
+                definition.Name,
+                definition.Position,
+                definition.Segments.Select(segment => segment.Label).ToArray(),
+                definition.Segments.Select(segment => segment.Action.Kind).ToArray(),
+                selectedIndex));
+
     private sealed class ActivePress(
         int layer,
         Ack05Action action,
@@ -775,6 +951,21 @@ public sealed class Ack05KeymapLayerRouter
         public int Layer { get; } = layer;
         public HashSet<Ack05Control> DownControls { get; } = [.. downControls];
         public bool OutputReleased { get; set; }
+    }
+
+    private sealed record PendingRadialMenu(
+        Ack05RadialMenuDefinition Definition,
+        DateTimeOffset PressedAt,
+        int Layer);
+
+    private sealed class ActiveRadialMenu(
+        Ack05RadialMenuDefinition definition,
+        int layer)
+    {
+        public Ack05RadialMenuDefinition Definition { get; } = definition;
+        public int Layer { get; } = layer;
+        public int SelectedIndex { get; set; } = -1;
+        public int NavigationPulses { get; set; }
     }
 
     private readonly record struct BufferedInput(

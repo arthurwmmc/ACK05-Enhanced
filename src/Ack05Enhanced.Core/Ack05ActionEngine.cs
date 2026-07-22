@@ -50,6 +50,8 @@ public sealed class Ack05ActionEngine
                 : PressChord(input.Control, action.Keys!),
             Ack05ActionKind.MouseWheel =>
                 [Ack05OutputEvent.MouseWheel(action.WheelSteps!.Value)],
+            Ack05ActionKind.OpenTarget =>
+                [Ack05OutputEvent.OpenTarget(action.Target!)],
             _ => [],
         };
     }

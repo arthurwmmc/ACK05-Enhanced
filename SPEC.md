@@ -1,8 +1,56 @@
 # ACK05 Enhanced v1 Specification
 
-Status: Draft / schema v3 Tap & Hold and two-key Combo, USB input, SendInput, profiles, and editor implemented
+Status: Draft / schema v4 Open Target, Radial Menus, Tap & Hold, two-key Combo, USB input, SendInput, profiles, and editor implemented
 
 Date: 2026-07-21
+
+## Open Target v1 acceptance contract
+
+- A single `Open Target` leaf action accepts one target string. The target may be
+  an executable, file, folder, Windows shortcut, or absolute HTTP/HTTPS URL.
+- Activating the action once delegates to the Windows shell `open` behavior:
+  folders open in Explorer, URLs in the default browser, associated files in
+  their registered application, and executables start normally.
+- If the desired child file is known, assigning that child path replaces the
+  manual "open folder, then click" sequence with one ACK05 press.
+- The action fires once on a physical Down or pulse. Up, reset, reconnect, and
+  configuration replacement never repeat or terminate a launched target.
+- `Open Target` is available to ordinary bindings, Tap output, and Combo output.
+  It is not available as a held Tap & Hold action because it has no held state.
+- GUI output remains opt-in through `Output ON`. The Probe CLI requires a
+  separate explicit target-launch permission in addition to its existing device
+  write and SendInput permissions.
+- Launch failure is reported without stopping the input runtime or disturbing
+  the pressed-key safety registry.
+- Schema v1-v3 configurations remain loadable. Saving writes schema v4; the new
+  action payload is `{ "kind": "openTarget", "target": "..." }`.
+- v1 does not interpret command strings, request elevation, wait for or terminate
+  launched processes, sequence multiple targets, or persist a working directory
+  and argument list.
+
+## Implemented Radial Menu slice
+
+- Each profile owns reusable Radial Menu definitions with a stable ID, name,
+  activation input, forward/backward navigation inputs, 100-1000 ms hold
+  threshold, 1-10 pulse navigation step, pointer/monitor-center placement, and
+  exactly 4, 6, or 8 ordered segments.
+- Holding the activation input beyond the threshold opens a focusless overlay.
+  A short press replays the activation input's ordinary binding unchanged.
+- The menu starts with no selection. Forward selects segment zero, backward
+  selects the last segment, subsequent pulses wrap, and activation release runs
+  the selected leaf action exactly once. Release without selection cancels.
+- While open, activation and navigation events are consumed. Escape, Output OFF,
+  disconnect, profile/config replacement, reset, and shutdown close without
+  executing a segment.
+- Initial segment outputs are Disabled, Keyboard Chord, Mouse Wheel, Open Target,
+  and TG(n). Held outputs, nested Tap & Hold, Combos, arbitrary command strings,
+  and nested radial menus are rejected.
+- The continuous monochrome wheel has external labels, built-in Windows action
+  icons, a compact center, and a solid selected segment. Pointer placement clamps
+  the complete 520 x 520 overlay inside the active monitor working area with a
+  16-pixel safety margin. Active-monitor center is available as an alternative.
+- Radial Menus has a dedicated three-column editor for definitions, clockwise
+  segments, and settings, plus a safe preview that never executes an action.
 
 ## Implemented Instrument Workbench UI slice
 
@@ -33,8 +81,9 @@ Date: 2026-07-21
 - The recovery envelope records the source path, saved-file fingerprint, and UTC
   timestamp. A changed source file blocks silent overwrite and offers Overwrite,
   Save As, or Cancel.
-- Keymap, Tap & Hold, Combos, and Profiles are separate workspaces. Tap & Hold
-  and Combos manage profile-owned schema-v3 definitions through the shared action library.
+- Keymap, Tap & Hold, Combos, Radial Menus, and Profiles are separate workspaces.
+  Tap & Hold, Combos, and Radial Menus manage profile-owned definitions through
+  the shared schema-v4 action library.
 - Tap & Hold keeps a compact current-layer ACK05 map visible between its definition
   list and inspector. The selected definition highlights its current-layer
   assignments, exact `Lx Ky` references are shown, and K1-K10 can be selected as
@@ -52,11 +101,12 @@ Date: 2026-07-21
   control. The editor always opens with output OFF; connection/waiting/error
   details remain separate in the status bar. The former Live runtime semantics,
   explicit first-use warning, hot-swap, and panic release are unchanged.
-- Workspace navigation shows the four direct pills while they fit. When their
-  container becomes narrower than their measured widths, all four switch atomically
-  to one active-workspace menu containing Keymap, Tap & Hold, Combos, and Profiles.
+- Workspace navigation shows the five direct pills while they fit. When their
+  container becomes narrower than their measured widths, all five switch atomically
+  to one active-workspace menu containing Keymap, Tap & Hold, Combos, Radial Menus,
+  and Profiles.
   The compact menu is separate from the `•••` file menu and is not persisted.
-- Opening Keymap, Tap & Hold, or Combos resets that workspace's inspector to its
+- Opening Keymap, Tap & Hold, Combos, or Radial Menus resets that workspace's inspector to its
   first field so a previous scroll position cannot hide the current context.
 - Owner-drawn navigation, physical keys, action cards, and Combo badges preserve
   native keyboard traversal and draw a monochrome focus cue. The roller is a
@@ -71,7 +121,7 @@ Date: 2026-07-21
 
 - Each profile owns reusable definitions with stable IDs, display names, Tap and
   Hold leaf actions, a 100-1000 ms tapping term, and one of three interrupt modes.
-- Initial Tap actions: Disabled, Keyboard Chord, Mouse Wheel, and TG(n).
+- Tap actions: Disabled, Keyboard Chord, Mouse Wheel, Open Target, and TG(n).
 - Initial Hold actions: Disabled, held Keyboard Chord, and MO(n).
 - A key binding references a definition by ID. Roller directions cannot use Tap & Hold.
 - `Hold on other key press` resolves Hold before routing the interrupting key;
@@ -81,7 +131,7 @@ Date: 2026-07-21
   release on key-up, disconnect, Output OFF, profile/config replacement, and shutdown.
 - The Tap & Hold workspace creates, edits, deletes, and assigns definitions while
   reusing the shared action library. Referenced definitions cannot be deleted.
-- Schema v1 and v2 files still load; the in-memory model upgrades to schema v3
+- Schema v1-v3 files still load; the in-memory model upgrades to schema v4
   without converting legacy `tapToggleHoldLayer` actions.
 
 ## Implemented two-key Combo slice
@@ -92,7 +142,7 @@ Date: 2026-07-21
   per-definition term, optional displayed order, trigger mode, and release policy.
 - Trigger modes are On second press, Tap only, and Hold together. The latter two
   expose a 50-2000 ms Hold Term.
-- Outputs may be Disabled, Keyboard Chord, Mouse Wheel, MO(n), or TG(n).
+- Outputs may be Disabled, Keyboard Chord, Mouse Wheel, Open Target, MO(n), or TG(n).
 - Candidate member events are buffered before normal bindings and Tap & Hold.
   A match suppresses both member bindings; a failed attempt replays each event
   with its captured timestamp into the normal resolver.

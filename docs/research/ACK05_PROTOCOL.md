@@ -1,5 +1,8 @@
 # ACK05 Protocol Research
 
+> Open Target is a host-side schema-v4 output action. It does not add or change
+> any ACK05 HID command, report, transport claim, driver behavior, or raw-mode byte.
+
 Research date: 2026-07-16
 
 ## Confirmed from public sources

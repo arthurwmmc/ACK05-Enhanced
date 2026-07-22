@@ -27,6 +27,24 @@ Keyboard actions can combine modifiers and a normal key. The Action Palette can
 also be dragged onto K1-K10. Pulse-only roller directions reject actions that
 require a later key-up, such as MO and Tap & Hold.
 
+## Open an app, file, folder, or URL
+
+1. Select the key, Tap slot, or Combo output to edit.
+2. Choose **Open Target** in Common or Targets.
+3. Paste an absolute HTTP/HTTPS URL, or browse for a file or folder.
+4. Choose **Use target**. The draft updates immediately; choose Save to persist it.
+5. Turn **Output ON** when you want physical ACK05 presses to open targets.
+
+Windows handles the target as if it were double-clicked: a folder opens in
+Explorer, a URL in the default browser, an associated document in its registered
+application, and an executable starts normally. If you know the final item inside
+a folder, select that item directly to replace “open folder, then click” with one
+button. Launch failure appears in the status bar without turning output off.
+
+Open Target does not interpret command strings, elevate privileges, wait for or
+close a program, or store command-line arguments in v1. A configuration received
+from someone else may contain launchable targets, so review it before Output ON.
+
 ## Keyboard operation
 
 Tab and Shift+Tab move through the workspaces, physical K1-K10 keys, inspector,
@@ -74,6 +92,25 @@ button above the map to hide them; it changes to `Combos OFF`. This is only a vi
 preference for the current app session. Combo definitions and recognition remain
 active, and Save/Undo are not affected.
 
+## Radial Menus
+
+Open **Radial Menus** and create a definition. Choose one held activation input,
+one forward input, and one backward input; the common ACK05 setup is a key plus
+Roller CW/CCW. Adjust the hold threshold, pulses per step, pointer/monitor-center
+placement, and 4/6/8 clockwise segments. Select each segment, edit its external
+label, and choose a safe output from the shared Action Palette.
+
+Choose **Preview overlay** to check the wheel without executing anything. At
+runtime, hold the activation input until the wheel appears, navigate to a segment,
+then release activation to execute once. Releasing before selecting, pressing
+Escape, switching Output OFF, disconnecting, changing profile/configuration, or
+closing the app cancels without execution. Near a screen edge, the complete wheel
+is moved inward so it remains inside the active monitor work area.
+
+Radial segments currently support Disabled, Keyboard Chord, Mouse Wheel, Open
+Target, and TG(n). Held layer output, Tap & Hold, Combo output, nested radial
+menus, scripts, and arbitrary command strings are intentionally unavailable.
+
 ## ACK05 output
 
 The editor is always available, but ACK05 capture and synthetic output are a
@@ -93,7 +130,7 @@ connection state are reported in the bottom status bar.
 
 Profiles can match the foreground process name; an unmatched process uses the
 default profile. Configuration is versioned JSON. Schema v1/v2 files load into
-the current schema-v3 model without silently converting legacy Tap-Hold actions.
+the current schema-v4 model without silently converting legacy Tap-Hold actions.
 
 Personal `ack05-config.json` files at the repository root are ignored by Git.
 Place deliberate shareable examples under `examples/` after removing private

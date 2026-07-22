@@ -45,6 +45,7 @@ public sealed class KeymapEditorForm : Form
     private readonly Button _save = new();
     private readonly InstrumentButton _live = new();
     private readonly Ack05LiveRuntime _liveRuntime = new();
+    private readonly RadialMenuOverlayForm _radialOverlay = new();
     private readonly Label _selectedKeyTitle = new();
     private readonly Label _selectedKeyCaption = new();
     private readonly Label _inspectorHint = new();
@@ -84,6 +85,20 @@ public sealed class KeymapEditorForm : Form
     private readonly ComboBox _comboTargetLayer = new();
     private readonly NumericUpDown _comboWheelSteps = new();
     private readonly Label _comboOutput = new();
+    private readonly ListBox _radialDefinitions = new();
+    private readonly ListBox _radialSegments = new();
+    private readonly TextBox _radialName = new();
+    private readonly TextBox _radialSegmentLabel = new();
+    private readonly ComboBox _radialActivation = new();
+    private readonly ComboBox _radialForward = new();
+    private readonly ComboBox _radialBackward = new();
+    private readonly ComboBox _radialPosition = new();
+    private readonly ComboBox _radialSegmentCount = new();
+    private readonly ComboBox _radialTargetLayer = new();
+    private readonly NumericUpDown _radialHoldThreshold = new();
+    private readonly NumericUpDown _radialNavigationStep = new();
+    private readonly NumericUpDown _radialWheelSteps = new();
+    private readonly Label _radialOutput = new();
     private readonly BufferedTableLayoutPanel _rootLayout = new();
     private readonly Panel _workspaceHost = new();
     private readonly BufferedFlowLayoutPanel _workspaceNavigation = new();
@@ -109,11 +124,13 @@ public sealed class KeymapEditorForm : Form
     private bool _dirty;
     private bool _tapHoldEditorLoading;
     private bool _comboEditorLoading;
+    private bool _radialEditorLoading;
     private string _activeWorkspace = "Keymap";
     private TapHoldSlot _tapHoldSlot = TapHoldSlot.Tap;
     private Ack05Control? _tapHoldSelectedControl;
     private Ack05Control? _comboFirstSelection;
     private Ack05KeyboardKey[]? _capturedKeyOrder;
+    private Ack05Action? _openTargetDraft;
     private CancellationTokenSource? _draftSaveCancellation;
     private int _draftSaveGeneration;
     private int _lastActionPaletteHeight = PreferredActionPaletteHeight;
@@ -147,12 +164,20 @@ public sealed class KeymapEditorForm : Form
             Interlocked.Increment(ref _draftSaveGeneration);
             _draftSaveCancellation?.Cancel();
             _draftSaveCancellation?.Dispose();
+            _radialOverlay.Dispose();
         };
 
         BuildLayout();
         Shown += (_, _) => InitializeWorkspaceSplit();
         KeyDown += OnEditorKeyDown;
         _liveRuntime.StatusChanged += OnLiveStatusChanged;
+        _liveRuntime.Notification += OnLiveNotification;
+        _liveRuntime.RadialMenuChanged += OnRadialMenuChanged;
+        _radialOverlay.CancelRequested += (_, _) =>
+        {
+            _liveRuntime.CancelRadialMenu();
+            _radialOverlay.HideOverlay();
+        };
         LoadProfiles();
         SelectDefaultProfile();
         RefreshDocumentState();
@@ -184,9 +209,11 @@ public sealed class KeymapEditorForm : Form
         tapHold.Name = "Tap & Hold";
         var combos = BuildComboWorkspace();
         combos.Name = "Combos";
+        var radialMenus = BuildRadialMenuWorkspace();
+        radialMenus.Name = "Radial Menus";
         var profiles = BuildProfilesPanel();
         profiles.Name = "Profiles";
-        _workspaceHost.Controls.AddRange([keymap, tapHold, combos, profiles]);
+        _workspaceHost.Controls.AddRange([keymap, tapHold, combos, radialMenus, profiles]);
 
         _actionDock.Dock = DockStyle.Fill;
         _actionDock.Margin = Padding.Empty;
@@ -347,9 +374,13 @@ public sealed class KeymapEditorForm : Form
             _workspaceMenu.Show(_workspaceMenuButton, new Point(0, _workspaceMenuButton.Height));
         navigation.Controls.Add(_workspaceMenuButton);
 
-        foreach (var name in new[] { "Keymap", "Tap & Hold", "Combos", "Profiles" })
+        foreach (var name in new[] { "Keymap", "Tap & Hold", "Combos", "Radial Menus", "Profiles" })
         {
-            var button = new InstrumentButton { Text = name, Width = name == "Tap & Hold" ? 118 : 96 };
+            var button = new InstrumentButton
+            {
+                Text = name,
+                Width = name is "Tap & Hold" or "Radial Menus" ? 126 : 96,
+            };
             button.Click += (_, _) => ShowWorkspace(name);
             _workspaceButtons[name] = button;
             navigation.Controls.Add(button);
@@ -458,6 +489,10 @@ public sealed class KeymapEditorForm : Form
             else if (string.Equals(_activeWorkspace, "Combos", StringComparison.Ordinal))
             {
                 LoadSelectedCombo();
+            }
+            else if (string.Equals(_activeWorkspace, "Radial Menus", StringComparison.Ordinal))
+            {
+                LoadSelectedRadialMenu();
             }
         };
         bar.Controls.Add(_layers);
@@ -887,6 +922,215 @@ public sealed class KeymapEditorForm : Form
         return workspace;
     }
 
+    private Control BuildRadialMenuWorkspace()
+    {
+        var workspace = new BufferedTableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            BackColor = InstrumentTheme.Canvas,
+            Margin = Padding.Empty,
+        };
+        workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 23));
+        workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 39));
+        workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
+
+        var library = new InstrumentPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 8, 8, 8),
+            Padding = new Padding(20),
+        };
+        var libraryLayout = new BufferedTableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 4,
+            BackColor = Color.Transparent,
+        };
+        libraryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        libraryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        libraryLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        libraryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        libraryLayout.Controls.Add(new Label
+        {
+            Text = "Radial Menus",
+            Dock = DockStyle.Fill,
+            Font = new Font(Font.FontFamily, 18F, FontStyle.Regular),
+            TextAlign = ContentAlignment.MiddleLeft,
+        }, 0, 0);
+        libraryLayout.Controls.Add(new Label
+        {
+            Text = "Hold, turn, release",
+            Dock = DockStyle.Fill,
+            ForeColor = InstrumentTheme.Muted,
+            TextAlign = ContentAlignment.MiddleLeft,
+        }, 0, 1);
+        _radialDefinitions.Dock = DockStyle.Fill;
+        _radialDefinitions.BorderStyle = BorderStyle.None;
+        _radialDefinitions.BackColor = InstrumentTheme.Surface;
+        _radialDefinitions.SelectedIndexChanged += (_, _) => LoadSelectedRadialMenu();
+        libraryLayout.Controls.Add(_radialDefinitions, 0, 2);
+        var definitionButtons = new BufferedFlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Padding = new Padding(0, 6, 0, 0),
+        };
+        var add = new InstrumentButton { Text = "+ New", Width = 92, Primary = true };
+        add.Click += (_, _) => AddRadialMenuDefinition();
+        var delete = new InstrumentButton { Text = "Delete", Width = 82 };
+        delete.Click += (_, _) => DeleteRadialMenuDefinition();
+        definitionButtons.Controls.AddRange([add, delete]);
+        libraryLayout.Controls.Add(definitionButtons, 0, 3);
+        library.Controls.Add(libraryLayout);
+        workspace.Controls.Add(library, 0, 0);
+
+        var segmentShell = new InstrumentPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(8),
+            Padding = new Padding(20),
+        };
+        var segmentLayout = new BufferedTableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 4,
+            BackColor = Color.Transparent,
+        };
+        segmentLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        segmentLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        segmentLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        segmentLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        segmentLayout.Controls.Add(new Label
+        {
+            Text = "Segments",
+            Dock = DockStyle.Fill,
+            Font = new Font(Font.FontFamily, 16F, FontStyle.Regular),
+            TextAlign = ContentAlignment.MiddleCenter,
+        }, 0, 0);
+        segmentLayout.Controls.Add(new Label
+        {
+            Text = "Ordered clockwise from 12 o'clock",
+            Dock = DockStyle.Fill,
+            ForeColor = InstrumentTheme.Muted,
+            TextAlign = ContentAlignment.MiddleCenter,
+        }, 0, 1);
+        _radialSegments.Dock = DockStyle.Fill;
+        _radialSegments.BorderStyle = BorderStyle.None;
+        _radialSegments.BackColor = InstrumentTheme.Surface;
+        _radialSegments.Font = new Font(Font.FontFamily, 11F, FontStyle.Regular);
+        _radialSegments.ItemHeight = 32;
+        _radialSegments.SelectedIndexChanged += (_, _) => LoadSelectedRadialSegment();
+        segmentLayout.Controls.Add(_radialSegments, 0, 2);
+        var preview = new InstrumentButton
+        {
+            Text = "Preview overlay",
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4, 8, 4, 0),
+            Primary = true,
+        };
+        preview.Click += (_, _) => PreviewRadialMenu();
+        segmentLayout.Controls.Add(preview, 0, 3);
+        segmentShell.Controls.Add(segmentLayout);
+        workspace.Controls.Add(segmentShell, 1, 0);
+
+        var editorShell = new InstrumentPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(8, 8, 0, 8),
+            Padding = new Padding(22, 16, 22, 16),
+        };
+        var editor = new BufferedFlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = true,
+            BackColor = Color.Transparent,
+        };
+        _workspaceInspectors["Radial Menus"] = editor;
+        editor.Resize += (_, _) =>
+        {
+            foreach (Control control in editor.Controls)
+            {
+                control.Width = Math.Max(240, editor.ClientSize.Width - 22);
+            }
+        };
+        editor.Controls.Add(InspectorLabel("RADIAL MENU SETTINGS", 30));
+
+        _radialName.Dock = DockStyle.Fill;
+        _radialName.Leave += (_, _) => CommitRadialMenuMetadata();
+        editor.Controls.Add(InspectorField("Name", "Reusable menu label.", _radialName));
+
+        ConfigureRadialControlPicker(_radialActivation, CommitRadialMenuMetadata);
+        editor.Controls.Add(InspectorField("Activation", "Hold to open; release to run.", _radialActivation));
+        ConfigureRadialControlPicker(_radialForward, CommitRadialMenuMetadata);
+        editor.Controls.Add(InspectorField("Forward", "Move one segment clockwise.", _radialForward));
+        ConfigureRadialControlPicker(_radialBackward, CommitRadialMenuMetadata);
+        editor.Controls.Add(InspectorField("Backward", "Move one segment counter-clockwise.", _radialBackward));
+
+        _radialHoldThreshold.Minimum = Ack05RadialMenuDefinition.MinimumHoldThresholdMs;
+        _radialHoldThreshold.Maximum = Ack05RadialMenuDefinition.MaximumHoldThresholdMs;
+        _radialHoldThreshold.Increment = 25;
+        _radialHoldThreshold.Value = Ack05RadialMenuDefinition.DefaultHoldThresholdMs;
+        _radialHoldThreshold.Dock = DockStyle.Fill;
+        _radialHoldThreshold.ValueChanged += (_, _) => CommitRadialMenuMetadata();
+        editor.Controls.Add(InspectorField("Hold threshold", "Tap releases the normal binding before this time.", _radialHoldThreshold));
+
+        _radialNavigationStep.Minimum = Ack05RadialMenuDefinition.MinimumNavigationStep;
+        _radialNavigationStep.Maximum = Ack05RadialMenuDefinition.MaximumNavigationStep;
+        _radialNavigationStep.Value = 1;
+        _radialNavigationStep.Dock = DockStyle.Fill;
+        _radialNavigationStep.ValueChanged += (_, _) => CommitRadialMenuMetadata();
+        editor.Controls.Add(InspectorField("Navigation step", "Pulses required to move one segment.", _radialNavigationStep));
+
+        _radialPosition.DropDownStyle = ComboBoxStyle.DropDownList;
+        _radialPosition.Dock = DockStyle.Fill;
+        _radialPosition.Items.AddRange(["Near pointer", "Active monitor center"]);
+        _radialPosition.SelectedIndexChanged += (_, _) => CommitRadialMenuMetadata();
+        editor.Controls.Add(InspectorField("Position", "Pointer placement is clamped inside the active monitor.", _radialPosition));
+
+        _radialSegmentCount.DropDownStyle = ComboBoxStyle.DropDownList;
+        _radialSegmentCount.Dock = DockStyle.Fill;
+        _radialSegmentCount.Items.AddRange([4, 6, 8]);
+        _radialSegmentCount.SelectedIndexChanged += (_, _) => CommitRadialSegmentCount();
+        editor.Controls.Add(InspectorField("Segment count", "Four, six, or eight ordered actions.", _radialSegmentCount));
+
+        editor.Controls.Add(InspectorLabel("SELECTED SEGMENT", 34));
+        _radialSegmentLabel.Dock = DockStyle.Fill;
+        _radialSegmentLabel.Leave += (_, _) => CommitRadialSegmentLabel();
+        editor.Controls.Add(InspectorField("Label", "Shown outside the wheel.", _radialSegmentLabel));
+        _radialOutput.Height = 42;
+        _radialOutput.Font = new Font(Font.FontFamily, 12F, FontStyle.Regular);
+        _radialOutput.TextAlign = ContentAlignment.MiddleLeft;
+        editor.Controls.Add(_radialOutput);
+
+        _radialTargetLayer.DropDownStyle = ComboBoxStyle.DropDownList;
+        _radialTargetLayer.Dock = DockStyle.Fill;
+        _radialTargetLayer.SelectedIndexChanged += (_, _) => CommitRadialSegmentParameters();
+        editor.Controls.Add(InspectorField("Output target layer", "Used by TG output.", _radialTargetLayer));
+        _radialWheelSteps.Minimum = -10;
+        _radialWheelSteps.Maximum = 10;
+        _radialWheelSteps.Value = 1;
+        _radialWheelSteps.Dock = DockStyle.Fill;
+        _radialWheelSteps.ValueChanged += (_, _) => CommitRadialSegmentParameters();
+        editor.Controls.Add(InspectorField("Output wheel steps", "Used by Mouse Wheel output.", _radialWheelSteps));
+
+        editorShell.Controls.Add(editor);
+        workspace.Controls.Add(editorShell, 2, 0);
+        return workspace;
+    }
+
+    private void ConfigureRadialControlPicker(ComboBox picker, Action commit)
+    {
+        picker.DropDownStyle = ComboBoxStyle.DropDownList;
+        picker.Dock = DockStyle.Fill;
+        picker.Items.AddRange(BindingCandidates.Cast<object>().ToArray());
+        picker.SelectedIndexChanged += (_, _) => commit();
+    }
+
     private Control BuildFutureWorkspace(string title, string description)
     {
         var panel = new InstrumentPanel
@@ -947,7 +1191,8 @@ public sealed class KeymapEditorForm : Form
 
         var usesActionDock = string.Equals(name, "Keymap", StringComparison.Ordinal) ||
             string.Equals(name, "Tap & Hold", StringComparison.Ordinal) ||
-            string.Equals(name, "Combos", StringComparison.Ordinal);
+            string.Equals(name, "Combos", StringComparison.Ordinal) ||
+            string.Equals(name, "Radial Menus", StringComparison.Ordinal);
         if (!usesActionDock && !_workspaceSplit.Panel2Collapsed)
         {
             RememberActionPaletteHeight();
@@ -968,6 +1213,10 @@ public sealed class KeymapEditorForm : Form
         else if (string.Equals(name, "Combos", StringComparison.Ordinal))
         {
             LoadComboDefinitions();
+        }
+        else if (string.Equals(name, "Radial Menus", StringComparison.Ordinal))
+        {
+            LoadRadialMenuDefinitions();
         }
         else if (string.Equals(name, "Keymap", StringComparison.Ordinal))
         {
@@ -1403,6 +1652,10 @@ public sealed class KeymapEditorForm : Form
         {
             LoadComboDefinitions();
         }
+        else if (string.Equals(_activeWorkspace, "Radial Menus", StringComparison.Ordinal))
+        {
+            LoadRadialMenuDefinitions();
+        }
     }
 
     private void LoadLayerTabs(Ack05Profile profile)
@@ -1506,6 +1759,7 @@ public sealed class KeymapEditorForm : Form
             _actionPalette.SetPulseOnly(control is
                 Ack05Control.RollerClockwise or Ack05Control.RollerCounterClockwise);
             _actionPalette.LoadAction(action);
+            _openTargetDraft = action.Kind == Ack05ActionKind.OpenTarget ? action : null;
             _capturedKeyOrder = action.Keys?.ToArray();
 
             _wheelSteps.Value = Math.Clamp(action.WheelSteps ?? 1, -10, 10);
@@ -1686,6 +1940,15 @@ public sealed class KeymapEditorForm : Form
             return;
         }
 
+        var radialReference = profile.RadialMenus.FirstOrDefault(definition =>
+            definition.Segments.Any(segment => segment.Action.TargetLayer == index));
+        if (radialReference is not null)
+        {
+            UpdateStatus(
+                $"Layer {index} is still referenced by Radial Menu {radialReference.Id}; change that segment first.");
+            return;
+        }
+
         var updatedProfile = CloneProfileWithLayers(
             profile,
             profile.Layers.Where(layer => layer.Index != index).ToArray());
@@ -1792,6 +2055,7 @@ public sealed class KeymapEditorForm : Form
             Ack05ActionKind.Transparent => Ack05Action.Transparent(),
             Ack05ActionKind.KeyboardChord => BuildKeyboardDraft(),
             Ack05ActionKind.MouseWheel => Ack05Action.MouseWheel((int)_wheelSteps.Value),
+            Ack05ActionKind.OpenTarget => _openTargetDraft,
             Ack05ActionKind.MomentaryLayer => Ack05Action.MomentaryLayer(SelectedTargetLayer()),
             Ack05ActionKind.ToggleLayer => Ack05Action.ToggleLayer(SelectedTargetLayer()),
             Ack05ActionKind.TapToggleHoldLayer => Ack05Action.TapToggleHoldLayer(
@@ -1984,7 +2248,8 @@ public sealed class KeymapEditorForm : Form
                     this,
                     "Enable ACK05 output?\n\n" +
                     "This sends the documented ACK05 raw-mode command and emits " +
-                    "Windows keyboard/mouse input. It does not change drivers, " +
+                    "Windows keyboard/mouse input. Open Target bindings may also " +
+                    "launch applications, files, folders, or URLs. It does not change drivers, " +
                     "HidHide, firmware, or pairing.",
                     "Enable ACK05 output",
                     MessageBoxButtons.YesNo,
@@ -2084,6 +2349,45 @@ public sealed class KeymapEditorForm : Form
                 UpdateStatus($"Output error: {status.Message}");
                 break;
         }
+    }
+
+    private void OnLiveNotification(string message)
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            BeginInvoke(() => OnLiveNotification(message));
+            return;
+        }
+
+        UpdateStatus(message);
+    }
+
+    private void OnRadialMenuChanged(Ack05RadialMenuState state)
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(() => OnRadialMenuChanged(state));
+            }
+            catch (InvalidOperationException) when (IsDisposed || Disposing)
+            {
+            }
+
+            return;
+        }
+
+        _radialOverlay.ShowState(state);
     }
 
     private void SetOutputButtonState(string text, bool selected, string accessibleName)
@@ -2368,6 +2672,7 @@ public sealed class KeymapEditorForm : Form
                 ? Ack05ActionPalette.Usage.Tap
                 : Ack05ActionPalette.Usage.Hold);
             _actionPalette.LoadAction(action);
+            _openTargetDraft = action.Kind == Ack05ActionKind.OpenTarget ? action : null;
             var target = action.TargetLayer ?? Math.Min(1, CurrentProfile()!.Layers.Length - 1);
             _tapHoldTargetLayer.SelectedItem = $"Layer {target}";
             _tapHoldWheelSteps.Value = Math.Clamp(action.WheelSteps ?? 1, -10, 10);
@@ -2414,6 +2719,8 @@ public sealed class KeymapEditorForm : Form
                 OrderChordKeys(_actionPalette.SelectedKeys)),
             Ack05ActionKind.MouseWheel when _tapHoldSlot == TapHoldSlot.Tap =>
                 Ack05Action.MouseWheel((int)_tapHoldWheelSteps.Value),
+            Ack05ActionKind.OpenTarget when _tapHoldSlot == TapHoldSlot.Tap =>
+                _openTargetDraft,
             Ack05ActionKind.ToggleLayer when _tapHoldSlot == TapHoldSlot.Tap =>
                 Ack05Action.ToggleLayer(SelectedTapHoldTargetLayer()),
             Ack05ActionKind.MomentaryLayer when _tapHoldSlot == TapHoldSlot.Hold =>
@@ -2701,6 +3008,9 @@ public sealed class KeymapEditorForm : Form
             _comboRelease.SelectedIndex = (int)definition.Release;
             _comboOutput.Text = $"OUTPUT  ·  {DescribeAction(definition.Action)}";
             _actionPalette.LoadAction(definition.Action);
+            _openTargetDraft = definition.Action.Kind == Ack05ActionKind.OpenTarget
+                ? definition.Action
+                : null;
             _comboTargetLayer.SelectedItem = $"Layer {definition.Action.TargetLayer ?? Math.Min(1, profile.Layers.Length - 1)}";
             _comboWheelSteps.Value = Math.Clamp(definition.Action.WheelSteps ?? 1, -10, 10);
             UpdateComboParameterVisibility(definition);
@@ -2836,6 +3146,7 @@ public sealed class KeymapEditorForm : Form
             Ack05ActionKind.KeyboardChord => Ack05Action.KeyboardChord(
                 OrderChordKeys(_actionPalette.SelectedKeys)),
             Ack05ActionKind.MouseWheel => Ack05Action.MouseWheel((int)_comboWheelSteps.Value),
+            Ack05ActionKind.OpenTarget => _openTargetDraft,
             Ack05ActionKind.MomentaryLayer => Ack05Action.MomentaryLayer(SelectedComboTargetLayer()),
             Ack05ActionKind.ToggleLayer => Ack05Action.ToggleLayer(SelectedComboTargetLayer()),
             _ => null,
@@ -2958,6 +3269,438 @@ public sealed class KeymapEditorForm : Form
 
         LoadComboDefinitions();
         UpdateStatus($"Deleted {definition.Id}.");
+    }
+
+    private void LoadRadialMenuDefinitions(string? preferredId = null)
+    {
+        if (CurrentProfile() is not { } profile)
+        {
+            return;
+        }
+
+        preferredId ??= CurrentRadialMenuDefinition()?.Id;
+        _radialEditorLoading = true;
+        _radialDefinitions.BeginUpdate();
+        try
+        {
+            _radialDefinitions.Items.Clear();
+            foreach (var definition in profile.RadialMenus)
+            {
+                _radialDefinitions.Items.Add(new RadialMenuListItem(
+                    definition.Id,
+                    $"{definition.Name}   {definition.Segments.Length} segments"));
+            }
+
+            if (_radialDefinitions.Items.Count > 0)
+            {
+                var index = profile.RadialMenus
+                    .Select((definition, index) => (definition, index))
+                    .FirstOrDefault(item => string.Equals(
+                        item.definition.Id,
+                        preferredId,
+                        StringComparison.OrdinalIgnoreCase)).index;
+                _radialDefinitions.SelectedIndex = Math.Clamp(index, 0, profile.RadialMenus.Length - 1);
+            }
+        }
+        finally
+        {
+            _radialDefinitions.EndUpdate();
+            _radialEditorLoading = false;
+        }
+
+        LoadSelectedRadialMenu();
+    }
+
+    private void LoadSelectedRadialMenu()
+    {
+        if (_radialEditorLoading || CurrentProfile() is not { } profile)
+        {
+            return;
+        }
+
+        var definition = CurrentRadialMenuDefinition();
+        var previousSegment = Math.Max(0, _radialSegments.SelectedIndex);
+        _radialEditorLoading = true;
+        try
+        {
+            var enabled = definition is not null;
+            _actionPalette.Enabled = enabled;
+            _actionPalette.SetUsage(Ack05ActionPalette.Usage.Radial);
+            _radialName.Enabled = enabled;
+            _radialActivation.Enabled = enabled;
+            _radialForward.Enabled = enabled;
+            _radialBackward.Enabled = enabled;
+            _radialHoldThreshold.Enabled = enabled;
+            _radialNavigationStep.Enabled = enabled;
+            _radialPosition.Enabled = enabled;
+            _radialSegmentCount.Enabled = enabled;
+            _radialSegmentLabel.Enabled = enabled;
+            _radialSegments.Items.Clear();
+            _radialTargetLayer.Items.Clear();
+            _radialTargetLayer.Items.AddRange(profile.Layers
+                .OrderBy(layer => layer.Index)
+                .Select(layer => $"Layer {layer.Index}")
+                .ToArray());
+
+            if (definition is null)
+            {
+                _radialName.Text = string.Empty;
+                _radialOutput.Text = "Create a Radial Menu to choose segment actions.";
+                _actionPalette.LoadAction(Ack05Action.Disabled());
+                return;
+            }
+
+            _radialName.Text = definition.Name;
+            _radialActivation.SelectedItem = definition.ActivationControl;
+            _radialForward.SelectedItem = definition.ForwardControl;
+            _radialBackward.SelectedItem = definition.BackwardControl;
+            _radialHoldThreshold.Value = Math.Clamp(
+                definition.HoldThresholdMs,
+                Ack05RadialMenuDefinition.MinimumHoldThresholdMs,
+                Ack05RadialMenuDefinition.MaximumHoldThresholdMs);
+            _radialNavigationStep.Value = Math.Clamp(
+                definition.NavigationStep,
+                Ack05RadialMenuDefinition.MinimumNavigationStep,
+                Ack05RadialMenuDefinition.MaximumNavigationStep);
+            _radialPosition.SelectedIndex = (int)definition.Position;
+            _radialSegmentCount.SelectedItem = definition.Segments.Length;
+            for (var index = 0; index < definition.Segments.Length; index++)
+            {
+                var segment = definition.Segments[index];
+                _radialSegments.Items.Add(new RadialSegmentListItem(
+                    index,
+                    $"{index + 1:00}   {segment.Label}   ·   {DescribeAction(segment.Action)}"));
+            }
+
+            _radialSegments.SelectedIndex = Math.Clamp(
+                previousSegment,
+                0,
+                definition.Segments.Length - 1);
+        }
+        finally
+        {
+            _radialEditorLoading = false;
+        }
+
+        LoadSelectedRadialSegment();
+    }
+
+    private void LoadSelectedRadialSegment()
+    {
+        if (_radialEditorLoading ||
+            CurrentRadialMenuDefinition() is not { } definition ||
+            _radialSegments.SelectedItem is not RadialSegmentListItem item)
+        {
+            return;
+        }
+
+        var segment = definition.Segments[item.Index];
+        _radialEditorLoading = true;
+        try
+        {
+            _radialSegmentLabel.Text = segment.Label;
+            _radialOutput.Text = $"OUTPUT  ·  {DescribeAction(segment.Action)}";
+            _actionPalette.LoadAction(segment.Action);
+            _openTargetDraft = segment.Action.Kind == Ack05ActionKind.OpenTarget
+                ? segment.Action
+                : null;
+            _radialTargetLayer.SelectedItem =
+                $"Layer {segment.Action.TargetLayer ?? Math.Min(1, CurrentProfile()!.Layers.Length - 1)}";
+            _radialWheelSteps.Value = Math.Clamp(segment.Action.WheelSteps ?? 1, -10, 10);
+            UpdateRadialParameterVisibility(segment.Action.Kind);
+        }
+        finally
+        {
+            _radialEditorLoading = false;
+        }
+    }
+
+    private Ack05RadialMenuDefinition? CurrentRadialMenuDefinition()
+    {
+        if (CurrentProfile() is not { } profile ||
+            _radialDefinitions.SelectedItem is not RadialMenuListItem item)
+        {
+            return null;
+        }
+
+        return profile.RadialMenus.FirstOrDefault(definition => string.Equals(
+            definition.Id,
+            item.Id,
+            StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void CommitRadialMenuMetadata()
+    {
+        if (_radialEditorLoading || CurrentRadialMenuDefinition() is not { } definition)
+        {
+            return;
+        }
+
+        var name = _radialName.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name) ||
+            _radialActivation.SelectedItem is not Ack05Control activation ||
+            _radialForward.SelectedItem is not Ack05Control forward ||
+            _radialBackward.SelectedItem is not Ack05Control backward)
+        {
+            return;
+        }
+
+        CommitRadialMenuDefinition(CloneRadialMenuDefinition(
+            definition,
+            name: name,
+            holdThresholdMs: (int)_radialHoldThreshold.Value,
+            position: (Ack05RadialMenuPosition)Math.Max(0, _radialPosition.SelectedIndex),
+            navigationStep: (int)_radialNavigationStep.Value,
+            activationControl: activation,
+            forwardControl: forward,
+            backwardControl: backward));
+    }
+
+    private void CommitRadialSegmentCount()
+    {
+        if (_radialEditorLoading ||
+            CurrentRadialMenuDefinition() is not { } definition ||
+            _radialSegmentCount.SelectedItem is not int count ||
+            count == definition.Segments.Length)
+        {
+            return;
+        }
+
+        var segments = Enumerable.Range(0, count)
+            .Select(index => index < definition.Segments.Length
+                ? definition.Segments[index]
+                : new Ack05RadialMenuSegment
+                {
+                    Label = $"Action {index + 1}",
+                    Action = Ack05Action.Disabled(),
+                })
+            .ToArray();
+        CommitRadialMenuDefinition(CloneRadialMenuDefinition(definition, segments: segments));
+    }
+
+    private void CommitRadialSegmentLabel()
+    {
+        if (_radialEditorLoading ||
+            CurrentRadialMenuDefinition() is not { } definition ||
+            _radialSegments.SelectedItem is not RadialSegmentListItem item)
+        {
+            return;
+        }
+
+        var label = _radialSegmentLabel.Text.Trim();
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return;
+        }
+
+        var segments = definition.Segments.ToArray();
+        var previous = segments[item.Index];
+        segments[item.Index] = new Ack05RadialMenuSegment
+        {
+            Label = label,
+            Action = previous.Action,
+            ExtensionData = previous.ExtensionData,
+        };
+        CommitRadialMenuDefinition(CloneRadialMenuDefinition(definition, segments: segments));
+    }
+
+    private void ApplyRadialSegmentFromPalette()
+    {
+        if (_radialEditorLoading ||
+            CurrentRadialMenuDefinition() is not { } definition ||
+            _radialSegments.SelectedItem is not RadialSegmentListItem item ||
+            BuildRadialSegmentDraft() is not { } action)
+        {
+            return;
+        }
+
+        CommitRadialSegmentAction(definition, item.Index, action);
+    }
+
+    private Ack05Action? BuildRadialSegmentDraft() => _actionPalette.SelectedKind switch
+    {
+        null => null,
+        Ack05ActionKind.Disabled => Ack05Action.Disabled(),
+        Ack05ActionKind.KeyboardChord => Ack05Action.KeyboardChord(
+            OrderChordKeys(_actionPalette.SelectedKeys)),
+        Ack05ActionKind.MouseWheel => Ack05Action.MouseWheel((int)_radialWheelSteps.Value),
+        Ack05ActionKind.OpenTarget => _openTargetDraft,
+        Ack05ActionKind.ToggleLayer => Ack05Action.ToggleLayer(SelectedRadialTargetLayer()),
+        _ => null,
+    };
+
+    private void CommitRadialSegmentParameters()
+    {
+        if (_radialEditorLoading ||
+            CurrentRadialMenuDefinition() is not { } definition ||
+            _radialSegments.SelectedItem is not RadialSegmentListItem item)
+        {
+            return;
+        }
+
+        var current = definition.Segments[item.Index].Action;
+        var action = current.Kind switch
+        {
+            Ack05ActionKind.MouseWheel => Ack05Action.MouseWheel((int)_radialWheelSteps.Value),
+            Ack05ActionKind.ToggleLayer => Ack05Action.ToggleLayer(SelectedRadialTargetLayer()),
+            _ => current,
+        };
+        CommitRadialSegmentAction(definition, item.Index, action);
+    }
+
+    private void CommitRadialSegmentAction(
+        Ack05RadialMenuDefinition definition,
+        int index,
+        Ack05Action action)
+    {
+        var segments = definition.Segments.ToArray();
+        var previous = segments[index];
+        segments[index] = new Ack05RadialMenuSegment
+        {
+            Label = previous.Label,
+            Action = action,
+            ExtensionData = previous.ExtensionData,
+        };
+        CommitRadialMenuDefinition(CloneRadialMenuDefinition(definition, segments: segments));
+    }
+
+    private int SelectedRadialTargetLayer() => Math.Max(0, _radialTargetLayer.SelectedIndex);
+
+    private void CommitRadialMenuDefinition(Ack05RadialMenuDefinition updated)
+    {
+        if (CurrentProfile() is not { } profile)
+        {
+            return;
+        }
+
+        var selectedSegment = Math.Max(0, _radialSegments.SelectedIndex);
+        var updatedProfile = CloneProfileWithRadialMenus(
+            profile,
+            profile.RadialMenus.Select(definition => string.Equals(
+                definition.Id,
+                updated.Id,
+                StringComparison.OrdinalIgnoreCase) ? updated : definition).ToArray());
+        if (!TryCommitProfileMutation(profile, updatedProfile, out var error))
+        {
+            UpdateStatus(error!);
+            return;
+        }
+
+        LoadRadialMenuDefinitions(updated.Id);
+        if (_radialSegments.Items.Count > 0)
+        {
+            _radialSegments.SelectedIndex = Math.Clamp(
+                selectedSegment,
+                0,
+                _radialSegments.Items.Count - 1);
+        }
+        UpdateStatus($"Updated {updated.Id}: {updated.Name}.");
+    }
+
+    private void AddRadialMenuDefinition()
+    {
+        if (CurrentProfile() is not { } profile)
+        {
+            return;
+        }
+
+        var comboControls = profile.Combos.SelectMany(combo => combo.Controls).ToHashSet();
+        var usedActivation = profile.RadialMenus.Select(menu => menu.ActivationControl).ToHashSet();
+        var activation = BindingCandidates.FirstOrDefault(control =>
+            control is not (Ack05Control.RollerClockwise or Ack05Control.RollerCounterClockwise) &&
+            !comboControls.Contains(control) && !usedActivation.Contains(control));
+        if (comboControls.Contains(activation) || usedActivation.Contains(activation))
+        {
+            UpdateStatus("No free held control is available for another Radial Menu activation.");
+            return;
+        }
+
+        var idIndex = 0;
+        var ids = profile.RadialMenus.Select(menu => menu.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        while (ids.Contains($"radial{idIndex}"))
+        {
+            idIndex++;
+        }
+
+        var labels = new[] { "Cut", "Undo", "Zoom", "Brush", "Play", "Mark", "Blade", "Ripple" };
+        var definition = new Ack05RadialMenuDefinition
+        {
+            Id = $"radial{idIndex}",
+            Name = "Main Wheel",
+            ActivationControl = activation,
+            ForwardControl = Ack05Control.RollerClockwise,
+            BackwardControl = Ack05Control.RollerCounterClockwise,
+            Segments = labels.Select(label => new Ack05RadialMenuSegment
+            {
+                Label = label,
+                Action = Ack05Action.Disabled(),
+            }).ToArray(),
+        };
+        var updatedProfile = CloneProfileWithRadialMenus(
+            profile,
+            [.. profile.RadialMenus, definition]);
+        if (!TryCommitProfileMutation(profile, updatedProfile, out var error))
+        {
+            UpdateStatus(error!);
+            return;
+        }
+
+        LoadRadialMenuDefinitions(definition.Id);
+        UpdateStatus($"Created {definition.Id}. Choose its three physical inputs and segment actions.");
+    }
+
+    private void DeleteRadialMenuDefinition()
+    {
+        if (CurrentProfile() is not { } profile ||
+            CurrentRadialMenuDefinition() is not { } definition)
+        {
+            return;
+        }
+
+        var updatedProfile = CloneProfileWithRadialMenus(
+            profile,
+            profile.RadialMenus.Where(menu => !string.Equals(
+                menu.Id,
+                definition.Id,
+                StringComparison.OrdinalIgnoreCase)).ToArray());
+        if (!TryCommitProfileMutation(profile, updatedProfile, out var error))
+        {
+            UpdateStatus(error!);
+            return;
+        }
+
+        LoadRadialMenuDefinitions();
+        UpdateStatus($"Deleted {definition.Id}.");
+    }
+
+    private void PreviewRadialMenu()
+    {
+        if (CurrentRadialMenuDefinition() is not { } definition)
+        {
+            return;
+        }
+
+        _radialOverlay.ShowState(new Ack05RadialMenuState(
+            true,
+            definition.Id,
+            definition.Name,
+            definition.Position,
+            definition.Segments.Select(segment => segment.Label).ToArray(),
+            definition.Segments.Select(segment => segment.Action.Kind).ToArray(),
+            Math.Max(0, _radialSegments.SelectedIndex)));
+    }
+
+    private void UpdateRadialParameterVisibility(Ack05ActionKind kind)
+    {
+        if (_radialTargetLayer.Parent is { } layerRow)
+        {
+            layerRow.Visible = kind == Ack05ActionKind.ToggleLayer;
+        }
+
+        if (_radialWheelSteps.Parent is { } wheelRow)
+        {
+            wheelRow.Visible = kind == Ack05ActionKind.MouseWheel;
+        }
     }
 
     private void UpdateComboParameterVisibility(Ack05ComboDefinition definition)
@@ -3085,6 +3828,30 @@ public sealed class KeymapEditorForm : Form
             ExtensionData = definition.ExtensionData,
         };
 
+    private static Ack05RadialMenuDefinition CloneRadialMenuDefinition(
+        Ack05RadialMenuDefinition definition,
+        string? name = null,
+        int? holdThresholdMs = null,
+        Ack05RadialMenuPosition? position = null,
+        int? navigationStep = null,
+        Ack05Control? activationControl = null,
+        Ack05Control? forwardControl = null,
+        Ack05Control? backwardControl = null,
+        Ack05RadialMenuSegment[]? segments = null) =>
+        new()
+        {
+            Id = definition.Id,
+            Name = name ?? definition.Name,
+            HoldThresholdMs = holdThresholdMs ?? definition.HoldThresholdMs,
+            Position = position ?? definition.Position,
+            NavigationStep = navigationStep ?? definition.NavigationStep,
+            ActivationControl = activationControl ?? definition.ActivationControl,
+            ForwardControl = forwardControl ?? definition.ForwardControl,
+            BackwardControl = backwardControl ?? definition.BackwardControl,
+            Segments = segments ?? definition.Segments,
+            ExtensionData = definition.ExtensionData,
+        };
+
     private void UpdateActionEditorEnabled()
     {
         var kind = _actionPalette.SelectedKind;
@@ -3115,6 +3882,22 @@ public sealed class KeymapEditorForm : Form
 
     private void OnActionPaletteSelectionChanged()
     {
+        if (_actionPalette.SelectedKind == Ack05ActionKind.OpenTarget &&
+            !_bindingEditorLoading && !_tapHoldEditorLoading &&
+            !_comboEditorLoading && !_radialEditorLoading)
+        {
+            var previous = CurrentPaletteAction();
+            using var dialog = new OpenTargetDialog(
+                previous.Kind == Ack05ActionKind.OpenTarget ? previous.Target : null);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                _actionPalette.LoadAction(previous);
+                return;
+            }
+
+            _openTargetDraft = Ack05Action.OpenTarget(dialog.Target);
+        }
+
         if (string.Equals(_activeWorkspace, "Tap & Hold", StringComparison.Ordinal))
         {
             ApplyTapHoldSlotFromPalette();
@@ -3124,6 +3907,12 @@ public sealed class KeymapEditorForm : Form
         if (string.Equals(_activeWorkspace, "Combos", StringComparison.Ordinal))
         {
             ApplyComboOutputFromPalette();
+            return;
+        }
+
+        if (string.Equals(_activeWorkspace, "Radial Menus", StringComparison.Ordinal))
+        {
+            ApplyRadialSegmentFromPalette();
             return;
         }
 
@@ -3153,6 +3942,7 @@ public sealed class KeymapEditorForm : Form
             Ack05ActionKind.KeyboardChord =>
                 $"Keyboard: {string.Join(" + ", _actionPalette.SelectedKeys)}",
             Ack05ActionKind.MouseWheel => $"Mouse Wheel: {_wheelSteps.Value:+#;-#;0}",
+            Ack05ActionKind.OpenTarget => DescribeAction(_openTargetDraft ?? CurrentPaletteAction()),
             Ack05ActionKind.MomentaryLayer => $"MO({SelectedTargetLayer()})",
             Ack05ActionKind.ToggleLayer => $"TG({SelectedTargetLayer()})",
             Ack05ActionKind.TapToggleHoldLayer =>
@@ -3175,6 +3965,8 @@ public sealed class KeymapEditorForm : Form
             Ack05ActionKind.Disabled => "This key produces no output on the current layer.",
             Ack05ActionKind.KeyboardChord => "The chord is held and released with the physical key.",
             Ack05ActionKind.MouseWheel => "Emits one configured wheel pulse.",
+            Ack05ActionKind.OpenTarget =>
+                "Opens the configured app, file, folder, shortcut, or URL once through Windows.",
             _ => "Choose an action from the library below.",
         };
     }
@@ -3429,6 +4221,30 @@ public sealed class KeymapEditorForm : Form
             ?.Action ?? DefaultActionForLayer(_selectedLayer);
     }
 
+    private Ack05Action CurrentPaletteAction()
+    {
+        if (string.Equals(_activeWorkspace, "Tap & Hold", StringComparison.Ordinal) &&
+            CurrentTapHoldDefinition() is { } tapHold)
+        {
+            return _tapHoldSlot == TapHoldSlot.Tap ? tapHold.OnTap : tapHold.OnHold;
+        }
+
+        if (string.Equals(_activeWorkspace, "Combos", StringComparison.Ordinal) &&
+            CurrentComboDefinition() is { } combo)
+        {
+            return combo.Action;
+        }
+
+        if (string.Equals(_activeWorkspace, "Radial Menus", StringComparison.Ordinal) &&
+            CurrentRadialMenuDefinition() is { } radial &&
+            _radialSegments.SelectedItem is RadialSegmentListItem segment)
+        {
+            return radial.Segments[segment.Index].Action;
+        }
+
+        return CurrentBindingAction();
+    }
+
     private void SelectControl(Ack05Control control)
     {
         foreach (DataGridViewRow row in _bindings.Rows)
@@ -3482,6 +4298,7 @@ public sealed class KeymapEditorForm : Form
             TapHolds = profile.TapHolds,
             ComboDefaults = profile.ComboDefaults,
             Combos = profile.Combos,
+            RadialMenus = profile.RadialMenus,
             Layers = Enumerable.Range(0, layerCount)
                 .Select(index => NormalizeLayer(
                     profile.Layers.SingleOrDefault(layer => layer.Index == index),
@@ -3540,6 +4357,7 @@ public sealed class KeymapEditorForm : Form
             TapHolds = profile.TapHolds,
             ComboDefaults = profile.ComboDefaults,
             Combos = profile.Combos,
+            RadialMenus = profile.RadialMenus,
             ExtensionData = profile.ExtensionData,
         };
 
@@ -3555,6 +4373,7 @@ public sealed class KeymapEditorForm : Form
             TapHolds = profile.TapHolds,
             ComboDefaults = profile.ComboDefaults,
             Combos = profile.Combos,
+            RadialMenus = profile.RadialMenus,
             ExtensionData = profile.ExtensionData,
         };
 
@@ -3570,6 +4389,7 @@ public sealed class KeymapEditorForm : Form
             TapHolds = tapHolds,
             ComboDefaults = profile.ComboDefaults,
             Combos = profile.Combos,
+            RadialMenus = profile.RadialMenus,
             ExtensionData = profile.ExtensionData,
         };
 
@@ -3586,6 +4406,23 @@ public sealed class KeymapEditorForm : Form
             TapHolds = profile.TapHolds,
             ComboDefaults = defaults,
             Combos = combos,
+            RadialMenus = profile.RadialMenus,
+            ExtensionData = profile.ExtensionData,
+        };
+
+    private static Ack05Profile CloneProfileWithRadialMenus(
+        Ack05Profile profile,
+        Ack05RadialMenuDefinition[] radialMenus) =>
+        new()
+        {
+            Id = profile.Id,
+            Name = profile.Name,
+            ApplicationMatch = profile.ApplicationMatch,
+            Layers = profile.Layers,
+            TapHolds = profile.TapHolds,
+            ComboDefaults = profile.ComboDefaults,
+            Combos = profile.Combos,
+            RadialMenus = radialMenus,
             ExtensionData = profile.ExtensionData,
         };
 
@@ -3605,6 +4442,7 @@ public sealed class KeymapEditorForm : Form
             TapHolds = profile.TapHolds,
             ComboDefaults = profile.ComboDefaults,
             Combos = profile.Combos,
+            RadialMenus = profile.RadialMenus,
             ExtensionData = profile.ExtensionData,
         };
 
@@ -3632,12 +4470,30 @@ public sealed class KeymapEditorForm : Form
             Ack05ActionKind.Transparent => "Transparent",
             Ack05ActionKind.KeyboardChord => string.Join(" + ", action.Keys ?? []),
             Ack05ActionKind.MouseWheel => $"Wheel {action.WheelSteps:+#;-#;0}",
+            Ack05ActionKind.OpenTarget => $"Open {CompactTarget(action.Target)}",
             Ack05ActionKind.MomentaryLayer => $"MO({action.TargetLayer})",
             Ack05ActionKind.ToggleLayer => $"TG({action.TargetLayer})",
             Ack05ActionKind.TapToggleHoldLayer => $"Tap/Hold({action.TargetLayer})",
             Ack05ActionKind.TapHold => $"TH({action.TapHoldId})",
             _ => action.Kind.ToString(),
         };
+
+    private static string CompactTarget(string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return "target";
+        }
+
+        if (Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            return uri.Host.Length > 0 ? uri.Host : target;
+        }
+
+        var trimmed = target.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return Path.GetFileName(trimmed) is { Length: > 0 } name ? name : target;
+    }
 
     private void UpdateStatus(string message)
     {
@@ -3658,6 +4514,16 @@ public sealed class KeymapEditorForm : Form
     }
 
     private sealed record ComboListItem(string Id, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    private sealed record RadialMenuListItem(string Id, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    private sealed record RadialSegmentListItem(int Index, string Label)
     {
         public override string ToString() => Label;
     }

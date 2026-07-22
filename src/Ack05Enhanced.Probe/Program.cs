@@ -298,6 +298,7 @@ static async Task<int> RunConfiguredAsync(string[] options)
     string? configPath = null;
     var enableBitmask = false;
     var allowSendInput = false;
+    var allowTargetLaunch = false;
 
     for (var index = 0; index < options.Length; index++)
     {
@@ -311,6 +312,9 @@ static async Task<int> RunConfiguredAsync(string[] options)
                 break;
             case "--allow-sendinput":
                 allowSendInput = true;
+                break;
+            case "--allow-target-launch":
+                allowTargetLaunch = true;
                 break;
             default:
                 Console.Error.WriteLine($"Unknown or incomplete run option: {options[index]}");
@@ -333,6 +337,9 @@ static async Task<int> RunConfiguredAsync(string[] options)
 
     Console.WriteLine("WARNING: configured run sends the documented ACK05 raw-mode command");
     Console.WriteLine("         and emits Windows SendInput keyboard/mouse events.");
+    Console.WriteLine(allowTargetLaunch
+        ? "WARNING: configured Open Target actions may launch applications, files, folders, or URLs."
+        : "Open Target actions are disabled; add --allow-target-launch to enable them.");
     Console.WriteLine($"Config: {Path.GetFullPath(configPath)}");
     Console.WriteLine($"Profile: {profile.Id} ({profile.Name})");
 
@@ -343,7 +350,9 @@ static async Task<int> RunConfiguredAsync(string[] options)
         cancellation.Cancel();
     };
 
-    using var sink = new ConsoleConfiguredAck05InputSink(configuration);
+    using var sink = new ConsoleConfiguredAck05InputSink(
+        configuration,
+        allowTargetLaunch: allowTargetLaunch);
     var service = new Ack05InputService(
         new HidAck05ReportSourceFactory(enableBitmask: true),
         sink,
@@ -400,8 +409,8 @@ static int ShowHelp()
     Console.WriteLine("  monitor --enable-bitmask          send known raw-mode command, then read");
     Console.WriteLine("  watch                             reconnecting read-only vendor monitor");
     Console.WriteLine("  watch --enable-bitmask            reconnect and re-enable known raw mode");
-    Console.WriteLine("  run --config <path> --enable-bitmask --allow-sendinput");
-    Console.WriteLine("                                    run one validated profile with SendInput");
+    Console.WriteLine("  run --config <path> --enable-bitmask --allow-sendinput [--allow-target-launch]");
+    Console.WriteLine("                                    run one profile; target launch is separately opt-in");
     Console.WriteLine("  raw-input                         observe ACK05 Windows Raw Input events");
     Console.WriteLine("  raw-input --list                  list Windows Raw Input device paths");
     Console.WriteLine("  raw-input --diagnostic-sources    also identify non-ACK05 event sources");

@@ -23,7 +23,7 @@ dotnet run --project .\tests\Ack05Enhanced.SelfTest -c Release --no-build
 ```
 
 The self-test does not require ACK05 hardware. A successful current run reports
-`40/40 tests passed`.
+`43/43 tests passed`.
 
 ## Start the editor
 

@@ -8,19 +8,30 @@ namespace Ack05Enhanced.Windows;
 public sealed class SendInputAck05Output : IDisposable
 {
     private readonly IAck05WindowsInputInjector _injector;
+    private readonly IAck05TargetLauncher? _targetLauncher;
     private readonly HashSet<Ack05KeyboardKey> _pressedKeys = new();
     private readonly List<Ack05KeyboardKey> _pressOrder = new();
     private bool _disposed;
 
     public SendInputAck05Output()
-        : this(new User32WindowsInputInjector())
+        : this(new User32WindowsInputInjector(), targetLauncher: null)
     {
     }
 
     public SendInputAck05Output(IAck05WindowsInputInjector injector)
+        : this(injector, targetLauncher: null)
+    {
+    }
+
+    public SendInputAck05Output(
+        IAck05WindowsInputInjector injector,
+        IAck05TargetLauncher? targetLauncher)
     {
         _injector = injector ?? throw new ArgumentNullException(nameof(injector));
+        _targetLauncher = targetLauncher;
     }
+
+    public event Action<string>? TargetLaunchFailed;
 
     public IReadOnlyCollection<Ack05KeyboardKey> PressedKeys => _pressOrder.AsReadOnly();
 
@@ -38,6 +49,9 @@ public sealed class SendInputAck05Output : IDisposable
                 break;
             case Ack05OutputEventKind.MouseWheel when output.WheelSteps != 0:
                 _injector.MouseWheel(output.WheelSteps);
+                break;
+            case Ack05OutputEventKind.OpenTarget when !string.IsNullOrWhiteSpace(output.Target):
+                OpenTarget(output.Target);
                 break;
             default:
                 throw new ArgumentException("Malformed logical output event.", nameof(output));
@@ -116,5 +130,23 @@ public sealed class SendInputAck05Output : IDisposable
         _injector.KeyUp(key);
         _pressedKeys.Remove(key);
         _pressOrder.Remove(key);
+    }
+
+    private void OpenTarget(string target)
+    {
+        if (_targetLauncher is null)
+        {
+            TargetLaunchFailed?.Invoke($"Target launch is not enabled: {target}");
+            return;
+        }
+
+        try
+        {
+            _targetLauncher.Open(target);
+        }
+        catch (Exception exception)
+        {
+            TargetLaunchFailed?.Invoke($"Could not open '{target}': {exception.Message}");
+        }
     }
 }

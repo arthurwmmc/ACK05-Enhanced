@@ -1,9 +1,8 @@
 # Radial Action Menu Concept
 
-Status: Future concept; preserve in the roadmap, but do not include in the first
-Tap & Hold / Combo schema-v3 implementation.
+Status: Implemented in schema v4; visual direction approved and Release UI checked.
 
-Date: 2026-07-17
+Date: 2026-07-21
 
 ## Product idea
 
@@ -34,7 +33,7 @@ device adapters.
 
 ## Interaction requirements
 
-- Support 4, 6, or 8 segments. Four is the simplest default.
+- Support 4, 6, or 8 segments. The editor creates eight safe Disabled segments by default.
 - Open only after a configurable hold threshold so a normal Tap action can coexist.
 - Start with no executable item selected. The first roller detent selects an item;
   releasing without selection cancels safely.
@@ -51,7 +50,8 @@ device adapters.
 - Position the overlay near the pointer by default, clamped to the active monitor;
   allow Center of active monitor as an alternative.
 - Support mixed-DPI and multi-monitor placement.
-- Show large icon/label pairs, strong selected contrast, and minimal secondary text.
+- Show a continuous wheel with Windows system icons, names outside the wheel,
+  strong selected contrast, and a deliberately small center.
 
 ## Action model
 
@@ -60,7 +60,7 @@ Each segment reuses the shared leaf-action chooser. Initial safe outputs are:
 - keyboard chord;
 - mouse wheel;
 - layer action where lifecycle semantics are valid;
-- a future allowlisted application/program action.
+- the implemented shell-delegated Open Target action.
 
 Arbitrary command lines, scripts, and shell strings are not accepted. Program
 launch requires a separate allowlisted action model, explicit file selection, and
@@ -69,7 +69,7 @@ scope for the first slice.
 
 ## UI direction
 
-Add a future `Radial Menus` workspace beside Keymap, Tap & Hold, and Combos. A
+Add a `Radial Menus` workspace beside Keymap, Tap & Hold, and Combos. A
 definition editor contains Name, Segment Count, Hold Threshold, Position, Navigation
 Step, activation input, forward input, backward input, and the ordered segment
 actions. The Keymap may offer a shortcut that assigns the activation input to the
@@ -79,6 +79,29 @@ The visual language should follow the current UI references: generous white/ligh
 gray space, thin black outlines, rounded containers, sparse labels, and a solid
 black selected segment. The overlay itself should be visually quieter than the
 foreground creative application.
+
+## Implemented visual and placement contract
+
+- The overlay has a transparent 520 x 520 bound, a 146-pixel outer wheel radius,
+  a 40-pixel center radius, and eight-segment-safe external-label radius.
+- Segment zero is centered at twelve o'clock and the editor list advances clockwise.
+- The selected segment uses solid near-black; other segments use the app's warm
+  off-white surface. Thin dividers and leaders retain the existing monochrome style.
+- External labels receive a one-pixel white contrast halo so foreground-app text
+  does not erase them. Leaders receive the same contrast treatment.
+- Built-in `Segoe MDL2 Assets` glyphs cover the approved sample semantics and
+  configured action kinds without adding a runtime dependency.
+- Pointer placement subtracts half the overlay size, then clamps X/Y to the active
+  monitor `WorkingArea` with a 16-pixel margin. The complete form remains visible;
+  it is never clipped or scaled down at an edge.
+- `WS_EX_NOACTIVATE`, tool-window, and transparent hit-test behavior keep the
+  overlay focusless and click-through. A temporary bare Escape hotkey cancels it.
+
+Release QA on 2026-07-21 used an isolated recovery path. The editor and overlay
+were captured at 1406 x 933, and the window was moved partly off-screen to force a
+left-edge placement. The overlay origin matched active-monitor working-area left
+plus 16 pixels and all 520 pixels remained visible. Mixed-DPI interaction is not
+yet hardware-verified.
 
 ## Main technical risks
 

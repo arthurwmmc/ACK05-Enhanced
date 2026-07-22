@@ -2,9 +2,15 @@
 
 [![Windows build](https://github.com/46slv/ACK05-Enhanced/actions/workflows/windows-build.yml/badge.svg)](https://github.com/46slv/ACK05-Enhanced/actions/workflows/windows-build.yml)
 
+The current schema-v4 preview includes reusable Radial Menus: hold an assignable
+input to open a focusless wheel near the pointer, navigate with two inputs (such
+as Roller CW/CCW), and release to run one safe action. The wheel uses external
+labels, a compact center, and active-monitor edge clamping.
+
 XPPen ACK05 Shortcut Remoteを、Vial / QMKのようなレイヤー付きキーマップで
 使うためのWindows companionアプリです。物理キーを見ながら、通常キー、
-`MO(n)` / `TG(n)`、Tap & Hold、2キーCombo、ホイール出力を編集できます。
+`MO(n)` / `TG(n)`、Tap & Hold、2キーCombo、ホイール出力、アプリ・ファイル・
+フォルダー・URLの起動を編集できます。
 
 > **Preview:** 現在はソースビルド向けです。配布パッケージ、コード署名、
 > USB receiver対応、direct Bluetooth対応はまだ正式リリース品質ではありません。
@@ -17,6 +23,7 @@ firmware、pairing、ドライバー、HidHide設定を自動変更しません�
 - ACK05の実機配置に沿ったK1-K10／ローラーのキーマップ編集
 - profileごとに2-8レイヤー（新規設定は4レイヤー）
 - Transparent、keyboard chord、mouse wheel、Disabled
+- 1キーでアプリ、ファイル、フォルダー、ショートカット、URLを開くOpen Target
 - 任意のK1-K10へ割り当てられる `MO(n)` と `TG(n)`
 - `Tap=B / Hold=Shift`、`Tap=B / Hold=MO(1)` の再利用可能なTap & Hold
 - exactly-two-key Combo（例: `K1 + K2 = Enter`）と判定パラメーター
@@ -76,6 +83,7 @@ workspace selectorへ切り替わります。
 - device enumerationとdecodeはread-onlyが既定
 - raw modeは文書化済みコマンドだけを明示opt-inで送信
 - SendInputはGUIのOutput ONまたはCLIの明示flagが必要
+- Open TargetはGUIのOutput ONが必要。CLIでは別の明示許可flagも必要
 - disconnect、Output OFF、profile/config変更、終了時に保持キーをpanic release
 - private captureと個人configはGit管理外
 - driver、HidHide、firmware、pairing、XPPen driverの制御は対象外

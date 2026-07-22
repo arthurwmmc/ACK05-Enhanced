@@ -17,6 +17,67 @@ Expected:
 - A simulated disconnect resets held Layer 1 inputs, disposes the source, and
   reconnects to a second source.
 - Shutdown resets held input using a non-cancelable sink notification.
+- Schema v1-v3 load into schema v4, and `openTarget` round-trips its target.
+- Open Target emits exactly once on Down/Pulse, emits nothing on Up/reset, and a
+  simulated shell failure is reported without throwing or changing held keys.
+
+## Open Target GUI and Windows shell
+
+1. With Output OFF, select K2 and choose **Open Target**. Confirm Cancel retains
+   the prior binding and **Use target** creates one Undo entry.
+2. Browse to a harmless folder. Confirm the map shows `OPEN`, Save writes
+   `kind: openTarget`, and Undo/Redo/Revert behave like other actions.
+3. Turn Output ON, press K2 once, and confirm one Explorer window opens. Releasing
+   K2 must not open another window.
+4. Repeat with an HTTP/HTTPS URL, a harmless document, and an executable or
+   shortcut. Confirm Windows uses the current default association.
+5. Assign Open Target to a Tap slot and Combo output. Confirm Hold rejects it and
+   Tap/Combo each launch once.
+6. Assign a missing absolute path. Confirm the status bar reports failure while
+   Output remains ON and subsequent keyboard bindings still produce matching Up.
+7. Run Probe without `--allow-target-launch`; confirm target events are ignored and
+   reported. Repeat only with a harmless target and the explicit flag.
+
+Automated schema, validation, one-shot output, shell-adapter delegation, and
+non-fatal failure checks passed on 2026-07-21. GUI steps remain manual: the local
+app opened an existing working-draft recovery prompt during this run. No Restore
+or Discard choice was made and the user's recovery data was not changed.
+
+## Radial Menu runtime, editor, and overlay
+
+### Automated
+
+1. Round-trip a 4-segment definition through schema v4.
+2. Reject duplicate IDs/activation inputs, three overlapping controls, pulse-only
+   activation, invalid timing/count/labels, Combo/Tap & Hold conflicts, and held
+   or composite segment actions.
+3. Confirm a short activation press replays the ordinary binding Down/Up.
+4. Confirm a threshold hold opens with no selection, forward/backward wrap, and
+   activation release executes the selected action once.
+5. Confirm release without selection and router reset close without execution.
+
+### Manual UI and placement
+
+1. Open Radial Menus, create a definition, and confirm the editor exposes the
+   three inputs, threshold, navigation step, placement, 4/6/8 count, clockwise
+   labels, output parameters, and shared palette.
+2. Choose Preview. Confirm the overlay is focusless, click-through, shows a
+   continuous wheel with external labels, built-in action icons, compact center,
+   and solid selected segment. Escape must close without executing.
+3. Move the editor so Preview is activated near each working-area edge. Confirm
+   all 520 x 520 overlay bounds remain inside the active monitor with a 16-pixel
+   margin. Repeat on each monitor and at available DPI scales.
+4. With Output ON and harmless actions, hold activation past the threshold,
+   navigate both directions, and release. Confirm one action. Repeat without a
+   selection and with Output OFF/disconnect; confirm no action.
+
+Verified on 2026-07-21 with an isolated recovery path and Release build: the
+editor, safe preview, Escape close, continuous wheel, external labels, system
+icons, compact center, and selected contrast passed. The window was moved partly
+off-screen; the pointer-position overlay origin was clamped to the active
+monitor's working-area left plus 16 pixels and remained fully visible. Automated
+configuration/lifecycle checks passed; mixed-DPI hardware interaction remains
+manual follow-up.
 
 ## Hardware phase A: wired USB
 
@@ -457,7 +518,8 @@ and physical input.
 
 Automated self-test coverage includes schema round-trip and validation, Press
 match/fallback, Tap-only, Hold-together, reset release, and Live 10 ms timer
-confirmation, plus all-member MO release. Current total: 40/40 deterministic tests.
+confirmation, plus all-member MO release and Open Target schema/output safety.
+Current total: 43/43 deterministic tests.
 
 User hardware result, 2026-07-20: the requested output checklist passed, including
 MO and TG layer behavior, non-K1 layer switching, Tap & Hold tap/hold output,
@@ -546,17 +608,17 @@ uses Output OFF/ON while retaining the verified runtime behavior.
     or connected, and returns to `Output OFF` after one click. The button must stay
     in the same position and the status bar must independently name waiting,
     connected, released, and error states.
-30. Resize to 1081 x 741. Confirm the four workspace pills are replaced atomically
+30. Resize to 1081 x 741. Confirm the five workspace pills are replaced atomically
     by one active-workspace selector, with no partial pill or overlap. Open its menu,
-    confirm all four workspaces are present and the current one is checked, navigate
-    to Profiles and Combos, then maximize and confirm all four pills return with
+    confirm all five workspaces are present and the current one is checked, navigate
+    to Profiles, Radial Menus, and Combos, then maximize and confirm all five pills return with
     the active workspace selected.
 
 Verified on 2026-07-21 with the isolated Release build: the visible/hidden Combo
 states, current-layer count, unchanged Save/Undo state, accessible names, Output
 OFF initial state, and revised first-use warning passed. Output ON waiting/connected
 visual state remains a hardware/manual follow-up; runtime lifecycle and release
-safety remain covered by the 40 deterministic tests and the 2026-07-20 hardware run.
+safety remain covered by the 43 deterministic tests and the 2026-07-20 hardware run.
 
 Verified on 2026-07-18 with the isolated Release build: steps 17-21 passed at
 the default 1420 x 940 size.
@@ -572,14 +634,14 @@ Settings or pass a settings-page launch argument; no system-wide setting was
 changed.
 
 Fix verification on 2026-07-21 with the Release build: step 30 passed. The compact
-selector showed `Workspace: Keymap`, exposed all four checked-menu choices, opened
-Profiles and Combos, and returned to four direct pills with Combos selected after
+selector showed `Workspace: Keymap`, exposed all four then-current checked-menu choices, opened
+Profiles and Combos, and returned to four then-current direct pills with Combos selected after
 maximize. Output remained OFF. Save/Undo state, profile/layer selection, and the
 Action Palette contract were unchanged.
 
 200% DPI verification on 2026-07-21 with the user's active Windows display
 setting and the Release build: the maximized app used the compact workspace
-selector, and Keymap, Tap & Hold, Combos, and Profiles all remained reachable.
+selector, and the four then-current Keymap, Tap & Hold, Combos, and Profiles workspaces remained reachable.
 The physical map, selected-key inspector, resizable Action Palette, layer/profile
 controls, K9 typography, white/outlined Combo badges, status area, and Output OFF
 boundary remained present. The output runtime was not enabled and no configuration

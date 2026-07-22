@@ -32,3 +32,9 @@ remained usable.
 measured client/control widths rather than a form-width constant, but each scale
 still needs real display evidence. No system setting, registry value, sign-out,
 driver, HidHide, firmware, or pairing state was changed by the test.
+
+The Radial Menus workspace and focusless overlay were added after the four-tab
+compact-header verification. The current selector measures all five workspaces,
+and default-size Release UI plus active-monitor edge clamping passed. A renewed
+compact-width 125/150/200% pass with the fifth workspace and multi-monitor radial
+placement remains open before release.

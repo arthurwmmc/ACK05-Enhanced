@@ -19,6 +19,10 @@
 
 ### Fixed
 
+- Radial overlay rendering no longer blends antialiased edges against the
+  transparency key, removing colored fringes around external labels and leaders.
+- Radial pointer placement now keeps the complete overlay inside the active
+  monitor work area, including when the editor is partly off-screen.
 - Compact-width headers now replace all workspace pills atomically with a dedicated
   active-workspace menu, preventing clipped Combos/Profiles navigation beneath the
   separate `•••` file menu.
@@ -34,6 +38,22 @@
 
 ### Added
 
+- Schema-v4 reusable Radial Menus with assignable activation/forward/backward
+  inputs, 4/6/8 clockwise segments, hold threshold, pulse navigation step,
+  pointer or monitor-center placement, and safe leaf-action validation.
+- Combo-first, timer-driven radial routing with short-press replay, no-selection
+  cancel, wraparound navigation, release-to-execute, and panic-safe cancellation.
+- Dedicated Radial Menus workspace and focusless click-through overlay using a
+  continuous monochrome wheel, external labels, Windows system icons, a compact
+  center, solid selected contrast, safe preview, and multi-monitor clamping.
+- `ACK05_ENHANCED_RECOVERY_PATH` test/development override for isolated visual QA;
+  the normal Local App Data recovery location is unchanged.
+- Schema-v4 `Open Target` action for launching an executable, associated file,
+  folder, shortcut, or HTTP/HTTPS URL once through the Windows shell. The shared
+  Action Palette supports normal bindings, Tap output, and Combo output; GUI
+  launch remains behind Output ON and Probe launch has a separate opt-in flag.
+- A reusable target picker with direct URL/path entry plus file and folder browse
+  actions, non-fatal launch-error reporting, and v1-v3 configuration migration.
 - Hardware-verified roller-center press input. The center switch is now a stateful
   `RollerPress` control with normal Down/Up semantics, editable keymap bindings,
   Tap & Hold assignment, and Combo membership. Existing configuration files load
@@ -79,8 +99,8 @@
 - Vertically resizable Action Palette that receives additional window height,
   exposes multiple complete card rows, and keeps its own scrolling region. Its
   divider uses a small centered rounded handle instead of a full-width color band.
-- Keymap, Tap & Hold, Combos, and Profiles workspaces; the latter three provide
-  stable destinations while their schema-v3 editors are implemented.
+- Keymap, Tap & Hold, Combos, Radial Menus, and Profiles workspaces with dedicated
+  editors for reusable behaviors and a shared action library.
 - Ease-out hover/selection transitions and an animated Advanced inspector drawer.
 - Unified collapsible Action Palette with direct Disabled/Transparent selection,
   grouped keyboard keys, and exclusive layer/device actions that gray out

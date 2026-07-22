@@ -22,6 +22,10 @@ public static class Ack05ConfigurationJson
             {
                 configuration = Ack05ConfigurationMigrator.MigrateV2(configuration);
             }
+            else if (configuration?.SchemaVersion == 3)
+            {
+                configuration = Ack05ConfigurationMigrator.MigrateV3(configuration);
+            }
 
             Ack05ConfigurationValidator.ValidateOrThrow(configuration);
             return configuration!;

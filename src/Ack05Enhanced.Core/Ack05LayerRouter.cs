@@ -4,14 +4,25 @@ public enum LayerRouteKind
 {
     Input,
     LayerChanged,
+    RadialMenuChanged,
 }
+
+public readonly record struct Ack05RadialMenuState(
+    bool IsOpen,
+    string Id,
+    string Name,
+    Ack05RadialMenuPosition Position,
+    string[] Labels,
+    Ack05ActionKind[] ActionKinds,
+    int SelectedIndex);
 
 public readonly record struct LayerRoutedEvent(
     LayerRouteKind Kind,
     Ack05Control Control,
     PhysicalEventType InputType,
     int Layer,
-    Ack05Action? ActionOverride = null);
+    Ack05Action? ActionOverride = null,
+    Ack05RadialMenuState? RadialMenu = null);
 
 public sealed class Ack05LayerRouter
 {

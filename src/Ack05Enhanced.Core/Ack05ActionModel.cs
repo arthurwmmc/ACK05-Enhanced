@@ -9,6 +9,7 @@ public enum Ack05ActionKind
     Transparent,
     KeyboardChord,
     MouseWheel,
+    OpenTarget,
     MomentaryLayer,
     ToggleLayer,
     TapToggleHoldLayer,
@@ -28,6 +29,11 @@ public sealed class Ack05Action
     /// Signed wheel detents. Positive is up and negative is down.
     /// </summary>
     public int? WheelSteps { get; init; }
+
+    /// <summary>
+    /// File, folder, executable, shortcut, or HTTP/HTTPS URL opened once by the host shell.
+    /// </summary>
+    public string? Target { get; init; }
 
     /// <summary>
     /// Target layer for layer actions. Null for output actions.
@@ -56,6 +62,9 @@ public sealed class Ack05Action
 
     public static Ack05Action MouseWheel(int steps) =>
         new() { Kind = Ack05ActionKind.MouseWheel, WheelSteps = steps };
+
+    public static Ack05Action OpenTarget(string target) =>
+        new() { Kind = Ack05ActionKind.OpenTarget, Target = target };
 
     public static Ack05Action MomentaryLayer(int layer) =>
         new() { Kind = Ack05ActionKind.MomentaryLayer, TargetLayer = layer };

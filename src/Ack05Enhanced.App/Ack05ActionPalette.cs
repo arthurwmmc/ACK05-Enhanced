@@ -15,11 +15,13 @@ internal sealed class Ack05ActionPalette : UserControl
         Tap,
         Hold,
         Combo,
+        Radial,
     }
 
     private static readonly string[] CategoryOrder =
     [
         "Common",
+        "Targets",
         "Layers",
         "Navigation",
         "Normal Keys",
@@ -214,6 +216,7 @@ internal sealed class Ack05ActionPalette : UserControl
             {
                 Usage.Tap or Usage.Hold => "Create or select a Tap & Hold definition to choose an action",
                 Usage.Combo => "Create or select a Combo to choose its output",
+                Usage.Radial => "Create or select a Radial Menu segment to choose its output",
                 _ => "Select a key to choose its action",
             }
             : _usage switch
@@ -221,6 +224,7 @@ internal sealed class Ack05ActionPalette : UserControl
             Usage.Tap => "Choose the action emitted by a short tap",
             Usage.Hold => "Choose the action held until the physical key is released",
             Usage.Combo => "Choose the output emitted by the selected two-key Combo",
+            Usage.Radial => "Choose the action executed when this segment is released",
             _ => "Select once to assign • drag the selected action onto another key",
         };
     }
@@ -249,6 +253,12 @@ internal sealed class Ack05ActionPalette : UserControl
         AddCommonExclusive(Ack05ActionKind.MomentaryLayer, "MO", "Hold layer");
         AddCommonExclusive(Ack05ActionKind.ToggleLayer, "Toggle", "Latch layer");
         AddCommonExclusive(Ack05ActionKind.MouseWheel, "Mouse Wheel", "Pulse");
+        AddCommonExclusive(Ack05ActionKind.OpenTarget, "Open Target", "App, file, folder, or URL");
+
+        _entries["Targets"].Add(PaletteEntry.Exclusive(
+            Ack05ActionKind.OpenTarget,
+            "Open Target",
+            "App, file, folder, or URL"));
 
         foreach (var key in Enum.GetValues<Ack05KeyboardKey>())
         {
@@ -382,9 +392,11 @@ internal sealed class Ack05ActionPalette : UserControl
                 Ack05ActionKind.MomentaryLayer or Ack05ActionKind.TapToggleHoldLayer,
             Usage.Hold => entry.Kind is Ack05ActionKind.Transparent or
                 Ack05ActionKind.MouseWheel or Ack05ActionKind.ToggleLayer or
-                Ack05ActionKind.TapToggleHoldLayer,
+                Ack05ActionKind.TapToggleHoldLayer or Ack05ActionKind.OpenTarget,
             Usage.Combo => entry.Kind is Ack05ActionKind.Transparent or
                 Ack05ActionKind.TapToggleHoldLayer,
+            Usage.Radial => entry.Kind is Ack05ActionKind.Transparent or
+                Ack05ActionKind.MomentaryLayer or Ack05ActionKind.TapToggleHoldLayer,
             _ => false,
         };
     }
@@ -395,6 +407,11 @@ internal sealed class Ack05ActionPalette : UserControl
             Ack05ActionKind.ToggleLayer or Ack05ActionKind.TapToggleHoldLayer)
         {
             return SelectCategory("Layers");
+        }
+
+        if (action.Kind == Ack05ActionKind.OpenTarget)
+        {
+            return SelectCategory("Targets");
         }
 
         if (action.Kind == Ack05ActionKind.KeyboardChord && action.Keys?.FirstOrDefault() is { } key)

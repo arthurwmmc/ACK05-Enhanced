@@ -15,12 +15,22 @@ internal static class RecoveryDraftStore
 {
     private const string DirectoryName = "ACK05 Enhanced";
     private const string FileName = "recovery-draft.json";
+    private const string RecoveryPathEnvironmentVariable = "ACK05_ENHANCED_RECOVERY_PATH";
     private static readonly object SyncRoot = new();
 
-    internal static string PathOnDisk => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        DirectoryName,
-        FileName);
+    internal static string PathOnDisk
+    {
+        get
+        {
+            var overridePath = Environment.GetEnvironmentVariable(RecoveryPathEnvironmentVariable);
+            return string.IsNullOrWhiteSpace(overridePath)
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    DirectoryName,
+                    FileName)
+                : Path.GetFullPath(overridePath);
+        }
+    }
 
     internal static RecoveryDraft? TryLoad(out string? error)
     {

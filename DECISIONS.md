@@ -1,5 +1,94 @@
 # Decisions
 
+## 2026-07-21: Use a focusless continuous wheel for Radial Menus
+
+### Background
+
+The user selected the first visual direction as the structural base and the third
+direction's finer details: one continuous wheel, names outside the wheel, and a
+smaller center. The menu must appear at the pointer without becoming clipped at a
+screen edge and must not steal focus from the creative application.
+
+### Options
+
+1. Use a centered modal picker with text inside large segments.
+2. Use a compact cursor menu with disconnected action tiles.
+3. Use a continuous focusless wheel with external labels and clamp its complete
+   bounds to the active monitor work area.
+
+### Decision
+
+Use option 3. A held activation input opens after a configurable threshold;
+forward/backward inputs select clockwise segments and activation release executes
+once. The menu starts with no selection and every cancellation path closes without
+execution. The Windows overlay is topmost, click-through, and non-activating. It
+uses a 520 x 520 visual bound, 146-pixel wheel radius, 40-pixel center radius,
+external labels with contrast halos, system icon font glyphs, and a 16-pixel
+working-area margin. Pointer placement is the default; active-monitor center is
+optional.
+
+### Reason
+
+The continuous wheel makes direction and wraparound legible, external names leave
+the slices visually quiet, and the small center emphasizes actions. Full-bound
+clamping directly handles the edge case without shrinking or clipping the menu.
+Built-in Windows icons keep the app dependency-free while retaining recognizable
+action symbols.
+
+### Impact
+
+Schema v4 profiles now contain Radial Menu definitions. Core owns buffering,
+selection, replay, and cancellation; Windows owns only overlay presentation and
+placement. Initial segment actions are deliberately limited to safe leaf actions.
+Mixed-DPI/multi-monitor hardware verification remains a release follow-up.
+
+### Rollback
+
+Remove Radial Menu definitions or replace their segments with Disabled. The
+feature can be reverted without changing ordinary layer, Tap & Hold, Combo, or
+Open Target semantics; configurations saved with radial definitions require a
+build that understands schema v4 radial fields.
+
+## 2026-07-21: Use one shell-delegated Open Target action
+
+### Background
+
+Users need one ACK05 press to replace opening a folder and clicking a known item,
+while also supporting applications, folders, files, shortcuts, and URLs.
+
+### Options
+
+- Add separate actions for programs, folders, documents, and URLs.
+- Store a command line and interpret it inside ACK05 Enhanced.
+- Store one target and delegate its normal `open` behavior to the Windows shell.
+
+### Decision
+
+Add one `openTarget` leaf action with a single target string. The Windows adapter
+uses shell `open`; Core only emits an OS-independent logical event. Accept local
+or UNC targets and absolute HTTP/HTTPS URLs. Keep arguments, working directories,
+command interpretation, elevation, process waiting, and process termination out
+of v1.
+
+### Reason
+
+One target matches the shortest setup and execution flow. Shell delegation gives
+the same association behavior users already expect from double-clicking in
+Explorer without putting Windows APIs into Core.
+
+### Impact
+
+Imported configurations can request launching a target once output is enabled.
+GUI Output ON remains explicit, its warning names target launching, and CLI launch
+requires a separate permission. Launch failures are non-fatal notifications.
+Saving upgrades the configuration to schema v4 while v1-v3 remain loadable.
+
+### Rollback
+
+Remove `Open Target` bindings or replace them with Disabled. Reverting the feature
+requires loading a pre-feature configuration because older builds cannot parse
+the new action kind.
+
 ## 2026-07-21: Publish ACK05 Enhanced as a public MIT-licensed project
 
 ### Background

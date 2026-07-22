@@ -2,6 +2,26 @@ namespace Ack05Enhanced.Core;
 
 public static class Ack05ConfigurationMigrator
 {
+    public static Ack05Configuration MigrateV3(Ack05Configuration legacy)
+    {
+        ArgumentNullException.ThrowIfNull(legacy);
+        if (legacy.SchemaVersion != 3)
+        {
+            throw new Ack05ConfigurationException(
+                $"Cannot migrate schemaVersion {legacy.SchemaVersion} as v3.",
+                new InvalidOperationException());
+        }
+
+        return new Ack05Configuration
+        {
+            SchemaVersion = Ack05Configuration.CurrentSchemaVersion,
+            DefaultProfileId = legacy.DefaultProfileId,
+            LayerSwitch = null,
+            Profiles = legacy.Profiles,
+            ExtensionData = legacy.ExtensionData,
+        };
+    }
+
     public static Ack05Configuration MigrateV2(Ack05Configuration legacy)
     {
         ArgumentNullException.ThrowIfNull(legacy);
@@ -26,6 +46,7 @@ public static class Ack05ConfigurationMigrator
                 TapHolds = [],
                 ComboDefaults = new Ack05ComboDefaults(),
                 Combos = [],
+                RadialMenus = [],
                 ExtensionData = profile.ExtensionData,
             }).ToArray(),
             ExtensionData = legacy.ExtensionData,
@@ -84,6 +105,7 @@ public static class Ack05ConfigurationMigrator
             TapHolds = [],
             ComboDefaults = new Ack05ComboDefaults(),
             Combos = [],
+            RadialMenus = [],
             ExtensionData = profile.ExtensionData,
         };
     }

@@ -20,17 +20,21 @@ public sealed class Ack05LiveRuntime : IAsyncDisposable
     private readonly IAck05ReportSourceFactory _sourceFactory;
     private readonly IAck05WindowsInputInjector _inputInjector;
     private readonly IForegroundProcessProvider _foregroundProcessProvider;
+    private readonly IAck05TargetLauncher _targetLauncher;
     private CancellationTokenSource? _cancellation;
     private ConfiguredAck05InputSink? _sink;
     private Task? _runTask;
 
     public event Action<Ack05LiveStatus>? StatusChanged;
+    public event Action<string>? Notification;
+    public event Action<Ack05RadialMenuState>? RadialMenuChanged;
 
     public Ack05LiveRuntime()
         : this(
             new HidAck05ReportSourceFactory(enableBitmask: true),
             new User32WindowsInputInjector(),
-            new WindowsForegroundProcessProvider())
+            new WindowsForegroundProcessProvider(),
+            new ShellAck05TargetLauncher())
     {
     }
 
@@ -38,11 +42,25 @@ public sealed class Ack05LiveRuntime : IAsyncDisposable
         IAck05ReportSourceFactory sourceFactory,
         IAck05WindowsInputInjector inputInjector,
         IForegroundProcessProvider foregroundProcessProvider)
+        : this(
+            sourceFactory,
+            inputInjector,
+            foregroundProcessProvider,
+            new ShellAck05TargetLauncher())
+    {
+    }
+
+    public Ack05LiveRuntime(
+        IAck05ReportSourceFactory sourceFactory,
+        IAck05WindowsInputInjector inputInjector,
+        IForegroundProcessProvider foregroundProcessProvider,
+        IAck05TargetLauncher targetLauncher)
     {
         _sourceFactory = sourceFactory ?? throw new ArgumentNullException(nameof(sourceFactory));
         _inputInjector = inputInjector ?? throw new ArgumentNullException(nameof(inputInjector));
         _foregroundProcessProvider = foregroundProcessProvider ??
             throw new ArgumentNullException(nameof(foregroundProcessProvider));
+        _targetLauncher = targetLauncher ?? throw new ArgumentNullException(nameof(targetLauncher));
     }
 
     public bool IsActive => _runTask is not null;
@@ -68,8 +86,11 @@ public sealed class Ack05LiveRuntime : IAsyncDisposable
             var sink = new ConfiguredAck05InputSink(
                 configuration,
                 _inputInjector,
-                _foregroundProcessProvider);
+                _foregroundProcessProvider,
+                _targetLauncher);
             sink.ConnectionStatusChanged += OnConnectionStatusChanged;
+            sink.TargetLaunchFailed += OnTargetLaunchFailed;
+            sink.RadialMenuChanged += OnRadialMenuChanged;
             var service = new Ack05InputService(
                 _sourceFactory,
                 sink,
@@ -99,6 +120,8 @@ public sealed class Ack05LiveRuntime : IAsyncDisposable
 
         sink.UpdateConfiguration(configuration);
     }
+
+    public void CancelRadialMenu() => _sink?.CancelRadialMenu();
 
     public async Task StopAsync()
     {
@@ -206,6 +229,8 @@ public sealed class Ack05LiveRuntime : IAsyncDisposable
         if (_sink is not null)
         {
             _sink.ConnectionStatusChanged -= OnConnectionStatusChanged;
+            _sink.TargetLaunchFailed -= OnTargetLaunchFailed;
+            _sink.RadialMenuChanged -= OnRadialMenuChanged;
             _sink.Dispose();
         }
 
@@ -240,6 +265,11 @@ public sealed class Ack05LiveRuntime : IAsyncDisposable
     }
 
     private void Publish(Ack05LiveStatus status) => StatusChanged?.Invoke(status);
+
+    private void OnTargetLaunchFailed(string message) => Notification?.Invoke(message);
+
+    private void OnRadialMenuChanged(Ack05RadialMenuState state) =>
+        RadialMenuChanged?.Invoke(state);
 }
 
 internal sealed class ConfiguredAck05InputSink : IAck05InputSink, IDisposable
@@ -255,17 +285,21 @@ internal sealed class ConfiguredAck05InputSink : IAck05InputSink, IDisposable
     internal ConfiguredAck05InputSink(
         Ack05Configuration configuration,
         IAck05WindowsInputInjector inputInjector,
-        IForegroundProcessProvider foregroundProcessProvider)
+        IForegroundProcessProvider foregroundProcessProvider,
+        IAck05TargetLauncher targetLauncher)
     {
         _profileSelector = new Ack05ProfileSelector(configuration);
         var profile = _profileSelector.Select(processName: null);
         _engine = new Ack05ActionEngine(profile);
         _layerRouter = new Ack05KeymapLayerRouter(profile);
-        _output = new SendInputAck05Output(inputInjector);
+        _output = new SendInputAck05Output(inputInjector, targetLauncher);
+        _output.TargetLaunchFailed += message => TargetLaunchFailed?.Invoke(message);
         _foregroundProcessProvider = foregroundProcessProvider;
     }
 
     internal event Action<Ack05ConnectionStatus>? ConnectionStatusChanged;
+    internal event Action<string>? TargetLaunchFailed;
+    internal event Action<Ack05RadialMenuState>? RadialMenuChanged;
 
     internal async Task MonitorForegroundProfileAsync(CancellationToken cancellationToken)
     {
@@ -310,6 +344,14 @@ internal sealed class ConfiguredAck05InputSink : IAck05InputSink, IDisposable
         }
     }
 
+    internal void CancelRadialMenu()
+    {
+        lock (_sync)
+        {
+            ApplyRouted(_layerRouter.CancelRadialMenu());
+        }
+    }
+
     public ValueTask OnConnectionStatusAsync(
         Ack05ConnectionStatus status,
         CancellationToken cancellationToken)
@@ -351,7 +393,12 @@ internal sealed class ConfiguredAck05InputSink : IAck05InputSink, IDisposable
     {
         foreach (var routed in routedEvents)
         {
-            if (routed.Kind == LayerRouteKind.Input)
+            if (routed.Kind == LayerRouteKind.RadialMenuChanged &&
+                routed.RadialMenu is { } radialMenu)
+            {
+                RadialMenuChanged?.Invoke(radialMenu);
+            }
+            else if (routed.Kind == LayerRouteKind.Input)
             {
                 _output.Apply(_engine.Apply(routed));
             }
@@ -412,7 +459,12 @@ internal sealed class ConfiguredAck05InputSink : IAck05InputSink, IDisposable
         {
             foreach (var routed in _layerRouter.Reset())
             {
-                if (routed.Kind == LayerRouteKind.Input)
+                if (routed.Kind == LayerRouteKind.RadialMenuChanged &&
+                    routed.RadialMenu is { } radialMenu)
+                {
+                    RadialMenuChanged?.Invoke(radialMenu);
+                }
+                else if (routed.Kind == LayerRouteKind.Input)
                 {
                     _output.Apply(_engine.Apply(routed));
                 }

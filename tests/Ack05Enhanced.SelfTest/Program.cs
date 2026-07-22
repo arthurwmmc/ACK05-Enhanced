@@ -26,11 +26,14 @@ var tests = new (string Name, Action Run)[]
     ("Combo trigger modes", ComboTriggerModes),
     ("Combo reset safety", ComboResetSafety),
     ("Combo momentary layer release policy", ComboMomentaryLayerReleasePolicy),
+    ("Radial Menu configuration and validation", RadialMenuConfigurationAndValidation),
+    ("Radial Menu lifecycle and reset safety", RadialMenuLifecycleAndResetSafety),
     ("input session reset", InputSessionReset),
     ("reconnect service reset", ReconnectServiceReset),
     ("disconnect reset", DisconnectReset),
     ("default configuration round trip", DefaultConfigurationRoundTrip),
     ("action configuration round trip", ActionConfigurationRoundTrip),
+    ("Open Target configuration and output", OpenTargetConfigurationAndOutput),
     ("unknown configuration fields round trip", UnknownConfigurationFieldsRoundTrip),
     ("future configuration schema rejection", FutureConfigurationSchemaRejection),
     ("invalid configuration rejection", InvalidConfigurationRejection),
@@ -356,6 +359,212 @@ static void DisconnectReset()
         "reset should restore base layer");
 }
 
+static void RadialMenuConfigurationAndValidation()
+{
+    var configuration = RadialMenuConfiguration();
+    Assert(Ack05ConfigurationValidator.Validate(configuration).Count == 0,
+        "valid Radial Menu configuration should pass validation");
+
+    var restored = Ack05ConfigurationJson.Deserialize(
+        Ack05ConfigurationJson.Serialize(configuration));
+    var radial = restored.Profiles.Single().RadialMenus.Single();
+    Assert(
+        radial.Segments.Length == 4 &&
+        radial.ActivationControl == Ack05Control.K1 &&
+        radial.ForwardControl == Ack05Control.RollerClockwise &&
+        radial.BackwardControl == Ack05Control.RollerCounterClockwise,
+        "Radial Menu controls and segments should round trip");
+
+    var invalid = new Ack05Configuration
+    {
+        Profiles =
+        [
+            new Ack05Profile
+            {
+                Id = "invalid-radial",
+                Name = "Invalid Radial",
+                Layers =
+                [
+                    new Ack05Layer { Index = 0 },
+                    new Ack05Layer { Index = 1 },
+                ],
+                RadialMenus =
+                [
+                    new Ack05RadialMenuDefinition
+                    {
+                        Id = "bad",
+                        Name = "Bad",
+                        ActivationControl = Ack05Control.RollerClockwise,
+                        ForwardControl = Ack05Control.RollerClockwise,
+                        BackwardControl = Ack05Control.K2,
+                        Segments = [new Ack05RadialMenuSegment { Label = "Only one" }],
+                    },
+                ],
+            },
+        ],
+        DefaultProfileId = "invalid-radial",
+    };
+    var errors = Ack05ConfigurationValidator.Validate(invalid);
+    Assert(errors.Any(error => error.Contains("distinct", StringComparison.Ordinal)),
+        "duplicate Radial Menu controls should be rejected");
+    Assert(errors.Any(error => error.Contains("Down and Up", StringComparison.Ordinal)),
+        "pulse-only activation should be rejected");
+    Assert(errors.Any(error => error.Contains("4, 6, or 8", StringComparison.Ordinal)),
+        "unsupported segment count should be rejected");
+}
+
+static void RadialMenuLifecycleAndResetSafety()
+{
+    var now = DateTimeOffset.Parse("2026-07-21T00:00:00Z");
+    var profile = RadialMenuConfiguration().Profiles.Single();
+    var router = new Ack05KeymapLayerRouter(profile, () => now);
+    var engine = new Ack05ActionEngine(profile);
+
+    Assert(router.Route(new PhysicalInputEvent(Ack05Control.K1, PhysicalEventType.Down)).Count == 0,
+        "activation down should be buffered");
+    now += TimeSpan.FromMilliseconds(100);
+    var tap = router.Route(new PhysicalInputEvent(Ack05Control.K1, PhysicalEventType.Up));
+    Assert(tap.Count == 2 && tap.All(item => item.Kind == LayerRouteKind.Input),
+        "release before threshold should replay the ordinary binding");
+    AssertSequence(
+        tap.SelectMany(engine.Apply),
+        Ack05OutputEvent.KeyDown(Ack05KeyboardKey.A),
+        Ack05OutputEvent.KeyUp(Ack05KeyboardKey.A));
+
+    router.Route(new PhysicalInputEvent(Ack05Control.K1, PhysicalEventType.Down));
+    now += TimeSpan.FromMilliseconds(250);
+    var opened = router.Tick();
+    Assert(
+        opened.Single().RadialMenu is { IsOpen: true, SelectedIndex: -1 },
+        "threshold should open with no executable selection");
+
+    var navigated = router.Route(
+        new PhysicalInputEvent(Ack05Control.RollerClockwise, PhysicalEventType.Pulse));
+    Assert(
+        navigated.Single().RadialMenu is { IsOpen: true, SelectedIndex: 0 },
+        "first forward pulse should select the first segment");
+
+    var completed = router.Route(
+        new PhysicalInputEvent(Ack05Control.K1, PhysicalEventType.Up));
+    Assert(completed.First().RadialMenu is { IsOpen: false },
+        "activation release should close the overlay before output");
+    AssertSequence(
+        completed.Where(item => item.Kind == LayerRouteKind.Input).SelectMany(engine.Apply),
+        Ack05OutputEvent.KeyDown(Ack05KeyboardKey.B),
+        Ack05OutputEvent.KeyUp(Ack05KeyboardKey.B));
+
+    router.Route(new PhysicalInputEvent(Ack05Control.K1, PhysicalEventType.Down));
+    now += TimeSpan.FromMilliseconds(250);
+    router.Tick();
+    router.Route(new PhysicalInputEvent(Ack05Control.RollerClockwise, PhysicalEventType.Pulse));
+    var reset = router.Reset();
+    Assert(reset.Any(item => item.RadialMenu is { IsOpen: false }),
+        "reset should close an open Radial Menu");
+    Assert(!reset.Any(item => item.Kind == LayerRouteKind.Input && item.ActionOverride is not null),
+        "reset must not execute the selected segment");
+
+    var comboFirst = new Ack05KeymapLayerRouter(profile, () => now);
+    Assert(comboFirst.Route(
+        new PhysicalInputEvent(Ack05Control.K2, PhysicalEventType.Down)).Count == 0,
+        "a possible Combo member should be buffered before radial resolution");
+    var radialAfterCombo = comboFirst.Route(
+        new PhysicalInputEvent(Ack05Control.K1, PhysicalEventType.Down));
+    Assert(
+        radialAfterCombo.Any(item =>
+            item.Kind == LayerRouteKind.Input &&
+            item.Control == Ack05Control.K2 &&
+            item.InputType == PhysicalEventType.Down),
+        "radial activation should first fail and replay an unrelated pending Combo");
+    now += TimeSpan.FromMilliseconds(250);
+    Assert(comboFirst.Tick().Any(item => item.RadialMenu is { IsOpen: true }),
+        "radial activation should still open after the pending Combo fails closed");
+}
+
+static Ack05Configuration RadialMenuConfiguration() =>
+    new()
+    {
+        DefaultProfileId = "radial",
+        Profiles =
+        [
+            new Ack05Profile
+            {
+                Id = "radial",
+                Name = "Radial",
+                Layers =
+                [
+                    new Ack05Layer
+                    {
+                        Index = 0,
+                        Bindings =
+                        [
+                            new Ack05Binding
+                            {
+                                Control = Ack05Control.K1,
+                                Action = Ack05Action.KeyboardChord(Ack05KeyboardKey.A),
+                            },
+                            new Ack05Binding
+                            {
+                                Control = Ack05Control.K2,
+                                Action = Ack05Action.KeyboardChord(Ack05KeyboardKey.C),
+                            },
+                        ],
+                    },
+                    new Ack05Layer { Index = 1 },
+                ],
+                Combos =
+                [
+                    new Ack05ComboDefinition
+                    {
+                        Id = "pair",
+                        Name = "K2 + K3",
+                        Controls = [Ack05Control.K2, Ack05Control.K3],
+                        Layers = [0],
+                        Trigger = Ack05ComboTrigger.Press,
+                        Release = Ack05ComboRelease.FirstMember,
+                        Action = Ack05Action.KeyboardChord(Ack05KeyboardKey.Enter),
+                    },
+                ],
+                RadialMenus =
+                [
+                    new Ack05RadialMenuDefinition
+                    {
+                        Id = "main",
+                        Name = "Main Wheel",
+                        HoldThresholdMs = 200,
+                        Position = Ack05RadialMenuPosition.Cursor,
+                        NavigationStep = 1,
+                        ActivationControl = Ack05Control.K1,
+                        ForwardControl = Ack05Control.RollerClockwise,
+                        BackwardControl = Ack05Control.RollerCounterClockwise,
+                        Segments =
+                        [
+                            new Ack05RadialMenuSegment
+                            {
+                                Label = "Cut",
+                                Action = Ack05Action.KeyboardChord(Ack05KeyboardKey.B),
+                            },
+                            new Ack05RadialMenuSegment
+                            {
+                                Label = "Scroll",
+                                Action = Ack05Action.MouseWheel(1),
+                            },
+                            new Ack05RadialMenuSegment
+                            {
+                                Label = "Open",
+                                Action = Ack05Action.OpenTarget("https://example.com"),
+                            },
+                            new Ack05RadialMenuSegment
+                            {
+                                Label = "Layer",
+                                Action = Ack05Action.ToggleLayer(1),
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
+
 static void InputSessionReset()
 {
     var session = new Ack05InputSession();
@@ -438,11 +647,11 @@ static void DefaultConfigurationRoundTrip()
     var json = Ack05ConfigurationJson.Serialize(original);
     var restored = Ack05ConfigurationJson.Deserialize(json);
 
-    Assert(restored.SchemaVersion == 3, "schemaVersion should round trip");
+    Assert(restored.SchemaVersion == 4, "schemaVersion should round trip");
     Assert(restored.DefaultProfileId == "default", "default profile should round trip");
     Assert(
         restored.LayerSwitch is null,
-        "schema v3 should not reserve a global layer control");
+        "schema v4 should not reserve a global layer control");
     Assert(restored.Profiles.Length == 1, "default configuration should have one profile");
     Assert(restored.Profiles[0].Layers.Length == 4, "default profile should have four layers");
     Assert(
@@ -530,6 +739,116 @@ static void ActionConfigurationRoundTrip()
         "per-key layer target and threshold should round trip");
 }
 
+static void OpenTargetConfigurationAndOutput()
+{
+    const string target = @"C:\Tools\Example\Example.exe";
+    var configuration = new Ack05Configuration
+    {
+        Profiles =
+        [
+            new Ack05Profile
+            {
+                Id = "default",
+                Name = "Default",
+                Layers =
+                [
+                    new Ack05Layer
+                    {
+                        Index = 0,
+                        Bindings =
+                        [
+                            new Ack05Binding
+                            {
+                                Control = Ack05Control.K1,
+                                Action = Ack05Action.OpenTarget(target),
+                            },
+                        ],
+                    },
+                    new Ack05Layer { Index = 1, Bindings = [] },
+                ],
+            },
+        ],
+    };
+
+    var json = Ack05ConfigurationJson.Serialize(configuration);
+    var restored = Ack05ConfigurationJson.Deserialize(json);
+    var action = restored.Profiles[0].Layers[0].Bindings[0].Action;
+    Assert(
+        restored.SchemaVersion == 4 &&
+        action.Kind == Ack05ActionKind.OpenTarget &&
+        action.Target == target,
+        "Open Target should round trip in schema v4");
+
+    var engine = new Ack05ActionEngine(restored.Profiles[0]);
+    AssertSequence(
+        engine.Apply(Input(Ack05Control.K1, PhysicalEventType.Down)),
+        Ack05OutputEvent.OpenTarget(target));
+    Assert(engine.Apply(Input(Ack05Control.K1, PhysicalEventType.Up)).Count == 0,
+        "Open Target key-up should not emit output");
+
+    var injector = new RecordingWindowsInputInjector();
+    var launcher = new RecordingTargetLauncher();
+    using var output = new SendInputAck05Output(injector, launcher);
+    output.Apply(Ack05OutputEvent.OpenTarget(target));
+    Assert(launcher.Targets.SequenceEqual([target]),
+        "Windows output should delegate Open Target once");
+
+    string? failure = null;
+    output.TargetLaunchFailed += message => failure = message;
+    launcher.Failure = new IOException("simulated launch failure");
+    output.Apply(Ack05OutputEvent.OpenTarget("https://example.com"));
+    Assert(failure?.Contains("simulated launch failure", StringComparison.Ordinal) == true,
+        "target launch failure should be reported without throwing");
+
+    var invalid = Ack05Action.OpenTarget("javascript:alert(1)");
+    var invalidConfiguration = new Ack05Configuration
+    {
+        Profiles =
+        [
+            new Ack05Profile
+            {
+                Id = "default",
+                Name = "Default",
+                Layers =
+                [
+                    new Ack05Layer
+                    {
+                        Index = 0,
+                        Bindings = [new Ack05Binding { Control = Ack05Control.K1, Action = invalid }],
+                    },
+                    new Ack05Layer { Index = 1, Bindings = [] },
+                ],
+            },
+        ],
+    };
+    Assert(Ack05ConfigurationValidator.Validate(invalidConfiguration).Count > 0,
+        "unsupported URI schemes should be rejected");
+
+    var tapConfiguration = TapHoldConfiguration(
+        Ack05Action.OpenTarget("https://example.com"),
+        Ack05Action.Disabled());
+    Assert(Ack05ConfigurationValidator.Validate(tapConfiguration).Count == 0,
+        "Open Target should be accepted as Tap output");
+    var invalidHoldConfiguration = TapHoldConfiguration(
+        Ack05Action.Disabled(),
+        Ack05Action.OpenTarget("https://example.com"));
+    Assert(Ack05ConfigurationValidator.Validate(invalidHoldConfiguration).Any(error =>
+            error.Contains("Hold", StringComparison.Ordinal)),
+        "Open Target should be rejected as held output");
+
+    var comboProfile = ComboConfiguration().Profiles.Single();
+    var openTargetComboProfile = CloneComboProfile(comboProfile,
+    [
+        CloneCombo(
+            comboProfile.Combos.Single(),
+            comboProfile.Combos.Single().Controls,
+            Ack05Action.OpenTarget("https://example.com")),
+    ]);
+    Assert(Ack05ConfigurationValidator.Validate(
+        new Ack05Configuration { Profiles = [openTargetComboProfile] }).Count == 0,
+        "Open Target should be accepted as Combo output");
+}
+
 static void UnknownConfigurationFieldsRoundTrip()
 {
     const string json = """
@@ -576,7 +895,7 @@ static void UnknownConfigurationFieldsRoundTrip()
     Assert(root.GetProperty("futureRoot").GetProperty("enabled").GetBoolean(),
         "unknown root field should survive round trip");
     Assert(
-        restored.SchemaVersion == 3 &&
+        restored.SchemaVersion == 4 &&
         restored.LayerSwitch is null &&
         restored.Profiles[0].Layers[0].Bindings.Single(binding => binding.Control == Ack05Control.K1)
             .Action.Kind == Ack05ActionKind.MomentaryLayer,
@@ -590,7 +909,7 @@ static void UnknownConfigurationFieldsRoundTrip()
 static void FutureConfigurationSchemaRejection()
 {
     var json = Ack05ConfigurationJson.Serialize(Ack05Configuration.CreateDefault())
-        .Replace("\"schemaVersion\": 3", "\"schemaVersion\": 4", StringComparison.Ordinal);
+        .Replace("\"schemaVersion\": 4", "\"schemaVersion\": 99", StringComparison.Ordinal);
 
     AssertThrows<Ack05ConfigurationException>(
         () => Ack05ConfigurationJson.Deserialize(json),
@@ -639,7 +958,7 @@ static void InvalidConfigurationRejection()
 
     var errors = Ack05ConfigurationValidator.Validate(configuration);
     Assert(!errors.Any(error => error.Contains("K1 is reserved", StringComparison.Ordinal)),
-        "schema v3 should allow K1 bindings");
+        "schema v4 should allow K1 bindings");
     Assert(errors.Any(error => error.Contains("duplicate binding", StringComparison.Ordinal)),
         "duplicate control binding should be rejected");
     AssertThrows<Ack05ConfigurationException>(
@@ -947,18 +1266,24 @@ static void TapHoldConfigurationRoundTrip()
     var profile = restored.Profiles.Single();
     var definition = profile.TapHolds.Single();
 
-    Assert(restored.SchemaVersion == 3, "Tap & Hold should serialize as schema v3");
+    Assert(restored.SchemaVersion == 4, "Tap & Hold should serialize as schema v4");
     Assert(definition.Id == "th0" && definition.OnTap.Keys!.Single() == Ack05KeyboardKey.B,
         "Tap & Hold definition should survive round trip");
     Assert(profile.Layers[0].Bindings.Single(binding => binding.Control == Ack05Control.K2)
         .Action.TapHoldId == "th0", "Tap & Hold reference should survive round trip");
 
+    var schema3Json = json.Replace("\"schemaVersion\": 4", "\"schemaVersion\": 3");
+    var migratedV3 = Ack05ConfigurationJson.Deserialize(schema3Json);
+    Assert(
+        migratedV3.SchemaVersion == 4 && migratedV3.Profiles.Single().TapHolds.Length == 1,
+        "schema v3 should load into schema v4 without changing Tap & Hold definitions");
+
     var legacy = Ack05Configuration.CreateDefault();
     var legacyJson = Ack05ConfigurationJson.Serialize(legacy)
-        .Replace("\"schemaVersion\": 3", "\"schemaVersion\": 2");
+        .Replace("\"schemaVersion\": 4", "\"schemaVersion\": 2");
     var migrated = Ack05ConfigurationJson.Deserialize(legacyJson);
-    Assert(migrated.SchemaVersion == 3 && migrated.Profiles.All(item => item.TapHolds.Length == 0),
-        "schema v2 should load into schema v3 without changing legacy bindings");
+    Assert(migrated.SchemaVersion == 4 && migrated.Profiles.All(item => item.TapHolds.Length == 0),
+        "schema v2 should load into schema v4 without changing legacy bindings");
 }
 
 static void TapHoldValidation()
@@ -1379,7 +1704,8 @@ static Ack05Profile CloneComboProfile(
 
 static Ack05ComboDefinition CloneCombo(
     Ack05ComboDefinition combo,
-    Ack05Control[] controls) =>
+    Ack05Control[] controls,
+    Ack05Action? action = null) =>
     new()
     {
         Id = combo.Id,
@@ -1391,7 +1717,7 @@ static Ack05ComboDefinition CloneCombo(
         Trigger = combo.Trigger,
         HoldTermMs = combo.HoldTermMs,
         Release = combo.Release,
-        Action = combo.Action,
+        Action = action ?? combo.Action,
     };
 
 static Ack05Profile TapHoldLayerProfile(Ack05TapHoldInterruptMode interruptMode) =>
@@ -1772,6 +2098,22 @@ sealed class RecordingWindowsInputInjector : IAck05WindowsInputInjector
     }
 
     public void MouseWheel(int steps) => Events.Add($"wheel {steps}");
+}
+
+sealed class RecordingTargetLauncher : IAck05TargetLauncher
+{
+    internal List<string> Targets { get; } = new();
+
+    internal Exception? Failure { get; set; }
+
+    public void Open(string target)
+    {
+        Targets.Add(target);
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+    }
 }
 
 sealed class FixedForegroundProcessProvider : IForegroundProcessProvider

@@ -5,7 +5,7 @@ namespace Ack05Enhanced.Core;
 
 public sealed class Ack05Configuration
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
     public const int MinimumLayerCount = 2;
     public const int DefaultLayerCount = 4;
     public const int MaximumLayerCount = 8;
@@ -112,6 +112,54 @@ public sealed class Ack05Profile
     public Ack05ComboDefaults ComboDefaults { get; init; } = new();
 
     public Ack05ComboDefinition[] Combos { get; init; } = [];
+
+    public Ack05RadialMenuDefinition[] RadialMenus { get; init; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+}
+
+public enum Ack05RadialMenuPosition
+{
+    Cursor,
+    ActiveMonitorCenter,
+}
+
+public sealed class Ack05RadialMenuDefinition
+{
+    public const int MinimumHoldThresholdMs = 100;
+    public const int MaximumHoldThresholdMs = 1000;
+    public const int DefaultHoldThresholdMs = 250;
+    public const int MinimumNavigationStep = 1;
+    public const int MaximumNavigationStep = 10;
+
+    public string Id { get; init; } = string.Empty;
+
+    public string Name { get; init; } = string.Empty;
+
+    public int HoldThresholdMs { get; init; } = DefaultHoldThresholdMs;
+
+    public Ack05RadialMenuPosition Position { get; init; } = Ack05RadialMenuPosition.Cursor;
+
+    public int NavigationStep { get; init; } = MinimumNavigationStep;
+
+    public Ack05Control ActivationControl { get; init; } = Ack05Control.K1;
+
+    public Ack05Control ForwardControl { get; init; } = Ack05Control.RollerClockwise;
+
+    public Ack05Control BackwardControl { get; init; } = Ack05Control.RollerCounterClockwise;
+
+    public Ack05RadialMenuSegment[] Segments { get; init; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+}
+
+public sealed class Ack05RadialMenuSegment
+{
+    public string Label { get; init; } = string.Empty;
+
+    public Ack05Action Action { get; init; } = Ack05Action.Disabled();
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }

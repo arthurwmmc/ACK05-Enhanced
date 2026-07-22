@@ -2,7 +2,7 @@
 
 ## Current preparation status (2026-07-21)
 
-- Local Release build and the 40/40 deterministic self-test have passed.
+- Local Release build and the 43/43 deterministic self-test have passed.
 - The public `46slv/ACK05-Enhanced` repository is connected and its first Windows
   GitHub Actions build/self-test run passed.
 - Public visibility, the `ACK05-Enhanced` repository name, and MIT license are
@@ -33,7 +33,7 @@
 - [x] Release build completes with zero warnings and errors.
 - [x] Deterministic self-test reports the documented total.
 - [x] GitHub Actions Windows workflow passes from a clean checkout.
-- [ ] Schema v1/v2 migration and schema-v3 round-trip remain covered.
+- [ ] Schema v1-v3 migration and schema-v4 round-trip remain covered.
 
 ## Manual verification
 
@@ -43,6 +43,8 @@
 - [ ] Keyboard focus and tab navigation reach all essential controls.
 - [ ] Output OFF and window close release every held synthetic key.
 - [ ] K1+K2 Combo acceptance and three-key fail-closed behavior are hardware-tested.
+- [ ] Radial Menu activation/navigation/release and cancel paths are hardware-tested.
+- [ ] Radial overlay remains fully visible on every supported monitor/DPI layout.
 
 ## Package
 

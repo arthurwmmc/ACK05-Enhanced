@@ -6,6 +6,7 @@ public static partial class Ack05ConfigurationValidator
 {
     private const int MaximumChordLength = 8;
     private const int MaximumWheelSteps = 10;
+    private const int MaximumTargetLength = 2048;
 
     public static IReadOnlyList<string> Validate(Ack05Configuration? configuration)
     {
@@ -29,7 +30,7 @@ public static partial class Ack05ConfigurationValidator
 
         if (configuration.LayerSwitch is not null)
         {
-            errors.Add("layerSwitch is obsolete in schema v3; assign layer actions to individual controls.");
+            errors.Add("layerSwitch is obsolete in schema v4; assign layer actions to individual controls.");
         }
 
         if (configuration.Profiles is null || configuration.Profiles.Length == 0)
@@ -112,6 +113,7 @@ public static partial class Ack05ConfigurationValidator
 
         var tapHolds = ValidateTapHolds(profile, path, profile.Layers.Length, errors);
         ValidateCombos(profile, path, profile.Layers.Length, errors);
+        ValidateRadialMenus(profile, path, profile.Layers.Length, errors);
         var layerIndices = new HashSet<int>();
         foreach (var layer in profile.Layers)
         {
@@ -121,6 +123,151 @@ public static partial class Ack05ConfigurationValidator
         if (!layerIndices.SetEquals(Enumerable.Range(0, profile.Layers.Length)))
         {
             errors.Add($"{path}: layer indices must be contiguous and start at 0.");
+        }
+    }
+
+    private static void ValidateRadialMenus(
+        Ack05Profile profile,
+        string profilePath,
+        int layerCount,
+        List<string> errors)
+    {
+        if (profile.RadialMenus is null)
+        {
+            errors.Add($"{profilePath}: radialMenus are required.");
+            return;
+        }
+
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var activationControls = new HashSet<Ack05Control>();
+        var comboControls = profile.Combos?
+            .Where(combo => combo?.Controls is not null)
+            .SelectMany(combo => combo.Controls)
+            .ToHashSet() ?? [];
+
+        foreach (var definition in profile.RadialMenus)
+        {
+            if (definition is null)
+            {
+                errors.Add($"{profilePath}: radialMenus must not contain null entries.");
+                continue;
+            }
+
+            var path = $"{profilePath}, radialMenu '{definition.Id}'";
+            if (string.IsNullOrWhiteSpace(definition.Id) ||
+                !ProfileIdPattern().IsMatch(definition.Id))
+            {
+                errors.Add($"{path}: id must use lowercase letters, digits, '.', '_' or '-'.");
+            }
+            else if (!ids.Add(definition.Id))
+            {
+                errors.Add($"{path}: duplicate definition id.");
+            }
+
+            if (string.IsNullOrWhiteSpace(definition.Name))
+            {
+                errors.Add($"{path}: name is required.");
+            }
+
+            if (definition.HoldThresholdMs is
+                < Ack05RadialMenuDefinition.MinimumHoldThresholdMs or
+                > Ack05RadialMenuDefinition.MaximumHoldThresholdMs)
+            {
+                errors.Add(
+                    $"{path}: holdThresholdMs must be from " +
+                    $"{Ack05RadialMenuDefinition.MinimumHoldThresholdMs} to " +
+                    $"{Ack05RadialMenuDefinition.MaximumHoldThresholdMs}.");
+            }
+
+            if (!Enum.IsDefined(definition.Position))
+            {
+                errors.Add($"{path}: unsupported position.");
+            }
+
+            if (definition.NavigationStep is
+                < Ack05RadialMenuDefinition.MinimumNavigationStep or
+                > Ack05RadialMenuDefinition.MaximumNavigationStep)
+            {
+                errors.Add(
+                    $"{path}: navigationStep must be from " +
+                    $"{Ack05RadialMenuDefinition.MinimumNavigationStep} to " +
+                    $"{Ack05RadialMenuDefinition.MaximumNavigationStep}.");
+            }
+
+            var controls = new[]
+            {
+                definition.ActivationControl,
+                definition.ForwardControl,
+                definition.BackwardControl,
+            };
+            if (controls.Any(control => !Enum.IsDefined(control)) ||
+                controls.Distinct().Count() != controls.Length)
+            {
+                errors.Add($"{path}: activation, forward, and backward controls must be distinct supported controls.");
+            }
+
+            if (definition.ActivationControl is
+                Ack05Control.RollerClockwise or Ack05Control.RollerCounterClockwise)
+            {
+                errors.Add($"{path}: activationControl must provide Down and Up events.");
+            }
+            else if (!activationControls.Add(definition.ActivationControl))
+            {
+                errors.Add($"{path}: activationControl is already used by another Radial Menu.");
+            }
+
+            if (controls.Any(comboControls.Contains))
+            {
+                errors.Add($"{path}: Radial Menu controls cannot also be Combo members in the first slice.");
+            }
+
+            if (profile.Layers.SelectMany(layer => layer.Bindings)
+                .Any(binding => binding.Control == definition.ActivationControl &&
+                    binding.Action.Kind == Ack05ActionKind.TapHold))
+            {
+                errors.Add($"{path}: activationControl cannot also reference Tap & Hold.");
+            }
+
+            if (definition.Segments is null ||
+                definition.Segments.Length is not (4 or 6 or 8))
+            {
+                errors.Add($"{path}: segments must contain exactly 4, 6, or 8 entries.");
+                continue;
+            }
+
+            for (var index = 0; index < definition.Segments.Length; index++)
+            {
+                var segment = definition.Segments[index];
+                var segmentPath = $"{path}, segment {index}";
+                if (segment is null)
+                {
+                    errors.Add($"{segmentPath}: segment is required.");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(segment.Label) || segment.Label.Length > 32)
+                {
+                    errors.Add($"{segmentPath}: label is required and must be 32 characters or fewer.");
+                }
+
+                if (segment.Action is null || segment.Action.Kind is not (
+                    Ack05ActionKind.Disabled or Ack05ActionKind.KeyboardChord or
+                    Ack05ActionKind.MouseWheel or Ack05ActionKind.OpenTarget or
+                    Ack05ActionKind.ToggleLayer))
+                {
+                    errors.Add($"{segmentPath}: action is not supported as a Radial Menu output.");
+                    continue;
+                }
+
+                ValidateAction(
+                    segment.Action,
+                    definition.ActivationControl,
+                    layerIndex: -1,
+                    layerCount,
+                    $"{segmentPath}, action",
+                    new Dictionary<string, Ack05TapHoldDefinition>(),
+                    errors);
+            }
         }
     }
 
@@ -227,7 +374,8 @@ public static partial class Ack05ConfigurationValidator
 
             if (definition.Action is null || definition.Action.Kind is not (
                 Ack05ActionKind.Disabled or Ack05ActionKind.KeyboardChord or
-                Ack05ActionKind.MouseWheel or Ack05ActionKind.MomentaryLayer or
+                Ack05ActionKind.MouseWheel or Ack05ActionKind.OpenTarget or
+                Ack05ActionKind.MomentaryLayer or
                 Ack05ActionKind.ToggleLayer))
             {
                 errors.Add($"{path}: action is not supported as Combo output.");
@@ -352,6 +500,7 @@ public static partial class Ack05ConfigurationValidator
             : action.Kind is Ack05ActionKind.Disabled or
                 Ack05ActionKind.KeyboardChord or
                 Ack05ActionKind.MouseWheel or
+                Ack05ActionKind.OpenTarget or
                 Ack05ActionKind.ToggleLayer;
         if (!allowed)
         {
@@ -488,7 +637,8 @@ public static partial class Ack05ConfigurationValidator
                     action.WheelSteps is not null ||
                     action.TargetLayer is not null ||
                     action.TapHoldThresholdMs is not null ||
-                    action.TapHoldId is not null)
+                    action.TapHoldId is not null ||
+                    action.Target is not null)
                 {
                     errors.Add($"{path}: {action.Kind} action must not contain a payload.");
                 }
@@ -518,7 +668,8 @@ public static partial class Ack05ConfigurationValidator
                 if (action.WheelSteps is not null ||
                     action.TargetLayer is not null ||
                     action.TapHoldThresholdMs is not null ||
-                    action.TapHoldId is not null)
+                    action.TapHoldId is not null ||
+                    action.Target is not null)
                 {
                     errors.Add($"{path}: keyboardChord contains an unsupported payload.");
                 }
@@ -529,7 +680,8 @@ public static partial class Ack05ConfigurationValidator
                 if (action.Keys is not null ||
                     action.TargetLayer is not null ||
                     action.TapHoldThresholdMs is not null ||
-                    action.TapHoldId is not null)
+                    action.TapHoldId is not null ||
+                    action.Target is not null)
                 {
                     errors.Add($"{path}: mouseWheel contains an unsupported payload.");
                 }
@@ -544,12 +696,33 @@ public static partial class Ack05ConfigurationValidator
 
                 break;
 
+            case Ack05ActionKind.OpenTarget:
+                if (action.Keys is not null ||
+                    action.WheelSteps is not null ||
+                    action.TargetLayer is not null ||
+                    action.TapHoldThresholdMs is not null ||
+                    action.TapHoldId is not null)
+                {
+                    errors.Add($"{path}: openTarget contains an unsupported payload.");
+                }
+
+                if (string.IsNullOrWhiteSpace(action.Target) ||
+                    action.Target.Length > MaximumTargetLength ||
+                    !IsSupportedOpenTarget(action.Target))
+                {
+                    errors.Add(
+                        $"{path}: openTarget requires an absolute file/folder path or HTTP/HTTPS URL up to {MaximumTargetLength} characters.");
+                }
+
+                break;
+
             case Ack05ActionKind.MomentaryLayer:
             case Ack05ActionKind.ToggleLayer:
             case Ack05ActionKind.TapToggleHoldLayer:
                 if (action.Keys is not null ||
                     action.WheelSteps is not null ||
-                    action.TapHoldId is not null)
+                    action.TapHoldId is not null ||
+                    action.Target is not null)
                 {
                     errors.Add($"{path}: layer action must not contain keys or wheelSteps.");
                 }
@@ -594,7 +767,8 @@ public static partial class Ack05ConfigurationValidator
                 if (action.Keys is not null ||
                     action.WheelSteps is not null ||
                     action.TargetLayer is not null ||
-                    action.TapHoldThresholdMs is not null)
+                    action.TapHoldThresholdMs is not null ||
+                    action.Target is not null)
                 {
                     errors.Add($"{path}: tapHold contains an unsupported payload.");
                 }
@@ -618,6 +792,34 @@ public static partial class Ack05ConfigurationValidator
                 }
 
                 break;
+        }
+    }
+
+    private static bool IsSupportedOpenTarget(string target)
+    {
+        if (target.IndexOfAny(['\0', '\r', '\n']) >= 0)
+        {
+            return false;
+        }
+
+        if (Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            return true;
+        }
+
+        if (target.Contains("://", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            return Path.IsPathFullyQualified(Environment.ExpandEnvironmentVariables(target));
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+        {
+            return false;
         }
     }
 

@@ -15,7 +15,8 @@ internal sealed class ConsoleConfiguredAck05InputSink : IAck05InputSink, IDispos
 
     internal ConsoleConfiguredAck05InputSink(
         Ack05Configuration configuration,
-        IForegroundProcessProvider? foregroundProcessProvider = null)
+        IForegroundProcessProvider? foregroundProcessProvider = null,
+        bool allowTargetLaunch = false)
     {
         _profileSelector = new Ack05ProfileSelector(configuration);
         _foregroundProcessProvider = foregroundProcessProvider ??
@@ -23,7 +24,10 @@ internal sealed class ConsoleConfiguredAck05InputSink : IAck05InputSink, IDispos
         var profile = _profileSelector.Select(processName: null);
         _engine = new Ack05ActionEngine(profile);
         _layerRouter = new Ack05KeymapLayerRouter(profile);
-        _output = new SendInputAck05Output();
+        _output = new SendInputAck05Output(
+            new User32WindowsInputInjector(),
+            allowTargetLaunch ? new ShellAck05TargetLauncher() : null);
+        _output.TargetLaunchFailed += message => Console.Error.WriteLine($"TARGET: {message}");
     }
 
     internal async Task MonitorForegroundProfileAsync(CancellationToken cancellationToken)
@@ -221,6 +225,7 @@ internal sealed class ConsoleConfiguredAck05InputSink : IAck05InputSink, IDispos
         Ack05OutputEventKind.KeyDown => $"{output.Key} Down",
         Ack05OutputEventKind.KeyUp => $"{output.Key} Up",
         Ack05OutputEventKind.MouseWheel => $"Wheel {output.WheelSteps:+#;-#;0}",
+        Ack05OutputEventKind.OpenTarget => $"Open {output.Target}",
         _ => output.Kind.ToString(),
     };
 }

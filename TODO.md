@@ -15,6 +15,8 @@
 - [x] hardware-shaped K1-K10/roller map
 - [x] keyboard shortcut capture
 - [x] explicit Open/Save/Validate and Output OFF/ON
+- [x] shell-delegated Open Target for apps, files, folders, shortcuts, and URLs
+- [ ] optional Open Target arguments/working directory after a separate safety design
 - [x] schema v2 with 2-8 layers and schema v1 migration
 - [x] Transparent, MO, TG, and Tap Toggle / Hold Layer on arbitrary keys
 - [x] dynamic add/remove layer UI with reference-safe deletion
@@ -49,7 +51,8 @@
 - [ ] `TO`, `OSL`, `LT`, `LM`
 - [ ] true multi-tap `TT`
 - [ ] macro editor and arbitrary tap action
-- [ ] radial action menu: assign activation/forward/backward inputs, select 4-8 actions, execute on activation release
+- [x] radial action menu: assign activation/forward/backward inputs, select 4/6/8 actions, execute on activation release
+- [ ] radial follow-up: mixed-DPI/multi-monitor hardware pass and optional custom icon selection per segment
 - [ ] native portable device/keymap package and explicit import-result contract
 - [ ] second-device adapter experiment to validate the generic input boundary
 - [ ] import/export and profile sharing
