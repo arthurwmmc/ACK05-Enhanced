@@ -3,7 +3,7 @@ using Ack05Enhanced.Windows;
 
 namespace Ack05Enhanced.Probe;
 
-internal sealed class ConsoleConfiguredAck05InputSink : IAck05InputSink, IDisposable
+internal sealed class ConsoleConfiguredAck05InputSink : IAck05GestureSink, IDisposable
 {
     private Ack05ActionEngine _engine;
     private Ack05KeymapLayerRouter _layerRouter;
@@ -46,6 +46,7 @@ internal sealed class ConsoleConfiguredAck05InputSink : IAck05InputSink, IDispos
         {
             lock (_sync)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     ApplyRouted(_layerRouter.Tick());
@@ -59,16 +60,22 @@ internal sealed class ConsoleConfiguredAck05InputSink : IAck05InputSink, IDispos
         }
     }
 
+    public void CancelCapture()
+    {
+        lock (_sync)
+        {
+            PanicRelease();
+        }
+    }
+
     public ValueTask OnConnectionStatusAsync(
         Ack05ConnectionStatus status,
         CancellationToken cancellationToken)
     {
-        if (status.State is Ack05ConnectionState.Disconnected or Ack05ConnectionState.Stopped)
+        // Retry releases if an earlier attempt to cancel the capture failed.
+        if (status.State == Ack05ConnectionState.Stopped)
         {
-            lock (_sync)
-            {
-                PanicRelease();
-            }
+            CancelCapture();
         }
 
         var line = status.State switch
@@ -96,6 +103,7 @@ internal sealed class ConsoleConfiguredAck05InputSink : IAck05InputSink, IDispos
     {
         lock (_sync)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 ApplyRouted(_layerRouter.Route(

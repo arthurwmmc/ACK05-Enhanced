@@ -16,7 +16,16 @@ Expected:
 - Malformed and non-raw reports are rejected.
 - A simulated disconnect resets held Layer 1 inputs, disposes the source, and
   reconnects to a second source.
-- Shutdown resets held input using a non-cancelable sink notification.
+- Diagnostic watch receives physical reset events even after cancellation.
+- With simulated HID, injector and launcher, stopping releases a held chord or
+  confirmed Combo before source disposal. Pending Tap & Hold, a single Combo
+  member and a Tap-only pair produce no new effects.
+- With an open radial and Open Target selected, test both Output OFF and a
+  simulated disconnect. Expect a closed overlay, cleared selection, zero launches
+  and an empty pressed-key set. Verify a real report from the next simulated
+  connection still performs its normal short press.
+- A read completing after cancellation produces no output. Restarting the same
+  runtime uses only the new session's mapping and lifecycle notifications.
 - Schema v1-v3 load into schema v4, and `openTarget` round-trips its target.
 - Open Target emits exactly once on Down/Pulse, emits nothing on Up/reset, and a
   simulated shell failure is reported without throwing or changing held keys.
@@ -519,7 +528,9 @@ and physical input.
 Automated self-test coverage includes schema round-trip and validation, Press
 match/fallback, Tap-only, Hold-together, reset release, and Live 10 ms timer
 confirmation, plus all-member MO release and Open Target schema/output safety.
-Current total: 43/43 deterministic tests.
+The capture-cancellation milestone passed 51 tests. Five additional simulated
+BLE diagnostics bring the suite to 56. The physical Windows BLE observations
+and remaining hardware tests are in [the BLE report](docs/research/ACK05_BLE_WINDOWS.md).
 
 User hardware result, 2026-07-20: the requested output checklist passed, including
 MO and TG layer behavior, non-K1 layer switching, Tap & Hold tap/hold output,

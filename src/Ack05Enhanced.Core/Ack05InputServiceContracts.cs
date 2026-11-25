@@ -38,6 +38,14 @@ public interface IAck05InputSink
         CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// A sink that owns gesture state and releases its own logical outputs when capture ends.
+/// </summary>
+public interface IAck05GestureSink : IAck05InputSink
+{
+    void CancelCapture();
+}
+
 public sealed class Ack05InputServiceOptions
 {
     public static Ack05InputServiceOptions Default { get; } = new(

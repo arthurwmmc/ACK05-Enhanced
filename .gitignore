@@ -8,6 +8,8 @@ artifacts/
 *.suo
 *.log
 captures/private/
+/output/handtak-ack05/
+/output/handtak-audit/
 captures/*.pcapng
 captures/*.pcap
 

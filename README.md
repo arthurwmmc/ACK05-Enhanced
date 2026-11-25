@@ -1,5 +1,9 @@
 # ACK05 Enhanced
 
+The Custom fork includes a separate read-only Windows BLE diagnostic. Its
+[hardware findings and usage](docs/research/ACK05_BLE_WINDOWS.md) cover direct
+Bluetooth discovery, GATT service access and the remaining capture tests.
+
 [![Windows build](https://github.com/46slv/ACK05-Enhanced/actions/workflows/windows-build.yml/badge.svg)](https://github.com/46slv/ACK05-Enhanced/actions/workflows/windows-build.yml)
 
 The current schema-v4 preview includes reusable Radial Menus: hold an assignable

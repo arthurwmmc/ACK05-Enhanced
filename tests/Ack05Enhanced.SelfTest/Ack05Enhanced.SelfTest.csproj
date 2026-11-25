@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="../../src/Ack05Enhanced.RawProbe/PacketDecoder.cs" Link="RawProbe/PacketDecoder.cs" />
     <ProjectReference Include="..\..\src\Ack05Enhanced.Core\Ack05Enhanced.Core.csproj" />
     <ProjectReference Include="..\..\src\Ack05Enhanced.Windows\Ack05Enhanced.Windows.csproj" />
   </ItemGroup>

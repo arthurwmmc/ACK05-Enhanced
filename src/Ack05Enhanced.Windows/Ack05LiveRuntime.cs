@@ -157,8 +157,6 @@ public sealed class Ack05LiveRuntime : IAsyncDisposable
         {
             _lifecycle.Release();
         }
-
-        Publish(new Ack05LiveStatus(Ack05LiveState.Stopped));
     }
 
     public async ValueTask DisposeAsync()
@@ -272,7 +270,7 @@ public sealed class Ack05LiveRuntime : IAsyncDisposable
         RadialMenuChanged?.Invoke(state);
 }
 
-internal sealed class ConfiguredAck05InputSink : IAck05InputSink, IDisposable
+internal sealed class ConfiguredAck05InputSink : IAck05GestureSink, IDisposable
 {
     private readonly IForegroundProcessProvider _foregroundProcessProvider;
     private readonly SendInputAck05Output _output;
@@ -317,6 +315,7 @@ internal sealed class ConfiguredAck05InputSink : IAck05InputSink, IDisposable
         {
             lock (_sync)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     ApplyRouted(_layerRouter.Tick());
@@ -352,16 +351,22 @@ internal sealed class ConfiguredAck05InputSink : IAck05InputSink, IDisposable
         }
     }
 
+    public void CancelCapture()
+    {
+        lock (_sync)
+        {
+            PanicRelease();
+        }
+    }
+
     public ValueTask OnConnectionStatusAsync(
         Ack05ConnectionStatus status,
         CancellationToken cancellationToken)
     {
-        if (status.State is Ack05ConnectionState.Disconnected or Ack05ConnectionState.Stopped)
+        // Retry releases if an earlier attempt to cancel the capture failed.
+        if (status.State == Ack05ConnectionState.Stopped)
         {
-            lock (_sync)
-            {
-                PanicRelease();
-            }
+            CancelCapture();
         }
 
         ConnectionStatusChanged?.Invoke(status);
@@ -374,6 +379,7 @@ internal sealed class ConfiguredAck05InputSink : IAck05InputSink, IDisposable
     {
         lock (_sync)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 ApplyRouted(_layerRouter.Route(

@@ -11,16 +11,17 @@ buttons held after the physical input session ends.
 Every connection owns a fresh `Ack05InputSession`. The session tracks physical
 held bits and the layer captured when each control went Down.
 
-The service must call `Ack05InputSession.Reset()` before disposing a disconnected
-source or completing process shutdown. Reset must:
+When a connection ends, the service calls `IAck05GestureSink.CancelCapture()`
+before disposing the report source and publishing Disconnected or Stopped.
+The GUI and configured Probe reset the gesture router under the same lock used
+for input and timer ticks. This discards pending taps, combos and radial selections,
+closes the overlay and releases already-held outputs through the action engine
+and the Windows pressed-key registry. Cleanup is independent of the capture token.
 
-1. derive Up events for every physically held key;
-2. route each Up through the layer captured on Down;
-3. restore Layer 0;
-4. be idempotent when called again.
-
-Reset events use `CancellationToken.None`. A canceled process token must not remove
-the output sink's final chance to release held input.
+The diagnostic watch sink still receives the physical Up events from
+`Ack05InputSession.Reset()` with the layer captured on Down and a non-cancelable
+token. Implement `IAck05GestureSink` for sinks that execute gestures on release.
+Each reconnect starts a fresh physical session after cleanup completes.
 
 ## Transport safety
 

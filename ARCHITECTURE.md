@@ -35,6 +35,10 @@ and regression tests. Configured GUI/CLI runs use pass-through physical events
 and resolve schema v4 layers, Combo definitions, Tap & Hold definitions, and leaf
 actions after the foreground profile is selected.
 
+At capture end, the service calls `IAck05GestureSink.CancelCapture()` before
+disposing the source. The configured hosts own gesture cancellation and logical
+key release. The diagnostic watch path retains its physical release trace.
+
 ## Module responsibilities
 
 ### `Ack05Enhanced.Core`

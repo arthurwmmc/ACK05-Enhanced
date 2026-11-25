@@ -19,6 +19,9 @@
 
 ### Fixed
 
+- Output OFF and device disconnect now cancel pending Tap & Hold, Combo and
+  Radial Menu gestures before disposing the input source. Already-injected keys
+  are released and late reads from a canceled capture are discarded.
 - Radial overlay rendering no longer blends antialiased edges against the
   transparency key, removing colored fringes around external labels and leaders.
 - Radial pointer placement now keeps the complete overlay inside the active

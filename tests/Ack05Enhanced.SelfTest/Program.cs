@@ -1,10 +1,20 @@
 using Ack05Enhanced.Core;
 using Ack05Enhanced.Windows;
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using System.Text.Json;
 
 var tests = new (string Name, Action Run)[]
 {
+    ("Raw Input per-device make/break, wheel and HID framing", RawProbeTests.Decode),
+    ("BLE dynamic candidate selection", BleDiagnosticTests.Discovery),
+    ("BLE notification capture, cancel and detach", NotificationTests.Cancellation),
+    ("BLE notification capture, disconnect and detach", NotificationTests.Disconnect),
+    ("BLE notification capture leaves disabled CCCD untouched", NotificationTests.Disabled),
+    ("BLE read-only service inventory", BleDiagnosticTests.Inventory),
+    ("BLE identity and access failures", BleDiagnosticTests.FailClosed),
+    ("BLE notification classification", BleDiagnosticTests.Frames),
+    ("BLE observation cancellation and reconnect", BleDiagnosticTests.Reconnect),
     ("raw report decoder", RawReportDecoder),
     ("all key bit mapping", AllKeyBitMapping),
     ("malformed report rejection", MalformedReportRejection),
@@ -48,6 +58,23 @@ var tests = new (string Name, Action Run)[]
     ("live runtime keymap layers", () => LiveRuntimeKeymapLayers().GetAwaiter().GetResult()),
     ("live runtime Tap & Hold timer", () => LiveRuntimeTapHoldTimer().GetAwaiter().GetResult()),
     ("live runtime Combo timer", () => LiveRuntimeComboTimer().GetAwaiter().GetResult()),
+    ("Output OFF releases an injected chord", () => StopWithHeldInput(
+        LiveConfiguration(Ack05KeyboardKey.LeftControl, Ack05KeyboardKey.A), 0x02,
+        ["down LeftControl", "down A"], ["up A", "up LeftControl"]).GetAwaiter().GetResult()),
+    ("Output OFF cancels a pending Tap & Hold", () => StopWithHeldInput(
+        TapHoldConfiguration(Ack05Action.OpenTarget("https://example.com"), Ack05Action.KeyboardChord(Ack05KeyboardKey.LeftShift)),
+        0x02, [], []).GetAwaiter().GetResult()),
+    ("Output OFF discards an incomplete Combo", () => StopWithHeldInput(
+        ComboConfiguration(), 0x01, [], []).GetAwaiter().GetResult()),
+    ("Output OFF cancels a Combo awaiting release", () => StopWithHeldInput(
+        ComboConfiguration(Ack05ComboTrigger.TapOnly, 2000), 0x03, [], []).GetAwaiter().GetResult()),
+    ("Output OFF releases a confirmed Combo", () => StopWithHeldInput(
+        ComboConfiguration(), 0x03, ["down Enter"], ["up Enter"]).GetAwaiter().GetResult()),
+    ("Output OFF cancels the selected radial sector", () => EndCaptureWithRadialSelection(
+        disconnect: false).GetAwaiter().GetResult()),
+    ("disconnect cancels the radial and isolates the next session", () => EndCaptureWithRadialSelection(
+        disconnect: true).GetAwaiter().GetResult()),
+    ("Output OFF ignores a late read", () => StopWithLateRead().GetAwaiter().GetResult()),
 };
 
 var failed = 0;
@@ -1760,7 +1787,7 @@ static Ack05Profile TapHoldLayerProfile(Ack05TapHoldInterruptMode interruptMode)
         ],
     };
 
-static Ack05Configuration LiveConfiguration(Ack05KeyboardKey key) =>
+static Ack05Configuration LiveConfiguration(params Ack05KeyboardKey[] keys) =>
     new()
     {
         DefaultProfileId = "default",
@@ -1780,7 +1807,7 @@ static Ack05Configuration LiveConfiguration(Ack05KeyboardKey key) =>
                             new Ack05Binding
                             {
                                 Control = Ack05Control.K2,
-                                Action = Ack05Action.KeyboardChord(key),
+                                Action = Ack05Action.KeyboardChord(keys),
                             },
                         ],
                     },
@@ -1824,6 +1851,111 @@ static Ack05Configuration KeymapLiveConfiguration() =>
             },
         ],
     };
+
+static byte[] PadReport(byte buttons, byte roller = 0) =>
+    [0x02, 0xF0, buttons, 0, 0, 0, 0, roller];
+
+static async Task StopWithHeldInput(
+    Ack05Configuration configuration, byte buttons, string[] beforeStop, string[] releases)
+{
+    var injector = new RecordingWindowsInputInjector();
+    string[]? eventsAtDisposal = null;
+    var source = new ScriptedReportSource(PadReport(buttons))
+    {
+        OnDisposing = () => eventsAtDisposal = injector.Events.ToArray(),
+    };
+    var launcher = new RecordingTargetLauncher();
+    await using var runtime = new Ack05LiveRuntime(
+        new ScriptedReportSourceFactory(source), injector, new FixedForegroundProcessProvider(), launcher);
+
+    await runtime.StartAsync(configuration);
+    await source.WaitingForMore.Task.WaitAsync(TimeSpan.FromSeconds(3));
+    if (beforeStop.Length > 0)
+    {
+        await WaitForEventsAsync(injector, beforeStop.Length);
+    }
+    AssertSequence(injector.Events, beforeStop);
+
+    await runtime.StopAsync();
+    string[] expected = [.. beforeStop, .. releases];
+    Assert(eventsAtDisposal is not null, "the source should be disposed during stop");
+    AssertSequence(eventsAtDisposal!, expected);
+    AssertSequence(injector.Events, expected);
+    Assert(injector.PressedKeys.Count == 0, "Output OFF should release all injected keys");
+    Assert(launcher.Targets.Count == 0, "cleanup must not launch the pending tap target");
+}
+
+static async Task EndCaptureWithRadialSelection(bool disconnect)
+{
+    var source = new ChannelReportSource();
+    var nextSource = new ScriptedReportSource(PadReport(0x01), PadReport(0x00));
+    var injector = new RecordingWindowsInputInjector();
+    var launcher = new RecordingTargetLauncher();
+    await using var runtime = new Ack05LiveRuntime(
+        new ScriptedReportSourceFactory(source, nextSource), injector, new FixedForegroundProcessProvider(), launcher);
+    var opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var selected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var overlays = new List<Ack05RadialMenuState>();
+    runtime.RadialMenuChanged += state =>
+    {
+        overlays.Add(state);
+        if (state.IsOpen && state.SelectedIndex == -1)
+        {
+            opened.TrySetResult();
+        }
+        if (state.IsOpen && state.SelectedIndex == 2)
+        {
+            selected.TrySetResult();
+        }
+    };
+
+    await runtime.StartAsync(RadialMenuConfiguration());
+    source.Write(PadReport(0x01));
+    await opened.Task.WaitAsync(TimeSpan.FromSeconds(3));
+    for (var i = 0; i < 3; i++)
+    {
+        source.Write(PadReport(0x01, roller: 1));
+    }
+    await selected.Task.WaitAsync(TimeSpan.FromSeconds(3)); // The selected sector is Open Target.
+
+    if (disconnect)
+    {
+        source.Disconnect();
+        await nextSource.WaitingForMore.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    await runtime.StopAsync();
+
+    Assert(overlays.Count(state => !state.IsOpen) == 1 &&
+        overlays.Last() is { IsOpen: false, SelectedIndex: -1 }, "capture end must discard the selection");
+    Assert(launcher.Targets.Count == 0, "a canceled radial sector must not launch its target");
+    // Only the new connection's physical short press may replay the normal K1 binding.
+    AssertSequence(injector.Events, disconnect ? ["down A", "up A"] : Array.Empty<string>());
+    Assert(injector.PressedKeys.Count == 0, "the new session should inherit no held keys");
+}
+
+static async Task StopWithLateRead()
+{
+    var source = new ScriptedReportSource { ReportOnCancellation = PadReport(0x02) };
+    var nextSource = new ScriptedReportSource(PadReport(0x02), PadReport(0x00));
+    var injector = new RecordingWindowsInputInjector();
+    await using var runtime = new Ack05LiveRuntime(new ScriptedReportSourceFactory(source, nextSource),
+        injector, new FixedForegroundProcessProvider(), new RecordingTargetLauncher());
+    var statuses = new ConcurrentQueue<Ack05LiveState>();
+    runtime.StatusChanged += status => statuses.Enqueue(status.State);
+
+    await runtime.StartAsync(LiveConfiguration(Ack05KeyboardKey.A));
+    await source.WaitingForMore.Task.WaitAsync(TimeSpan.FromSeconds(3));
+    await runtime.StopAsync();
+    AssertSequence(injector.Events);
+    Assert(injector.PressedKeys.Count == 0, "a late read must not leave pressed keys");
+
+    await runtime.StartAsync(LiveConfiguration(Ack05KeyboardKey.B));
+    await nextSource.WaitingForMore.Task.WaitAsync(TimeSpan.FromSeconds(3));
+    await runtime.StopAsync();
+    AssertSequence(injector.Events, "down B", "up B");
+    AssertSequence(statuses.Where(state => state != Ack05LiveState.WaitingForDevice),
+        Ack05LiveState.Connected, Ack05LiveState.Stopped, Ack05LiveState.Connected, Ack05LiveState.Stopped);
+}
 
 static async Task WaitForEventsAsync(RecordingWindowsInputInjector injector, int count)
 {
@@ -2008,6 +2140,9 @@ sealed class ScriptedReportSource : IAck05ReportSource
     public int InputReportLength => 32;
 
     internal bool IsDisposed { get; private set; }
+    internal TaskCompletionSource WaitingForMore { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    internal byte[]? ReportOnCancellation { get; init; }
+    internal Action? OnDisposing { get; init; }
 
     public async ValueTask<int> ReadAsync(
         Memory<byte> buffer,
@@ -2015,7 +2150,16 @@ sealed class ScriptedReportSource : IAck05ReportSource
     {
         if (_steps.Count == 0)
         {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            WaitingForMore.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (ReportOnCancellation is not null)
+            {
+                ReportOnCancellation.CopyTo(buffer.Span);
+                return ReportOnCancellation.Length;
+            }
             return 0;
         }
 
@@ -2032,6 +2176,7 @@ sealed class ScriptedReportSource : IAck05ReportSource
 
     public ValueTask DisposeAsync()
     {
+        OnDisposing?.Invoke();
         IsDisposed = true;
         return ValueTask.CompletedTask;
     }
@@ -2082,22 +2227,28 @@ sealed class RecordingInputSink : IAck05InputSink
 
 sealed class RecordingWindowsInputInjector : IAck05WindowsInputInjector
 {
-    internal List<string> Events { get; } = new();
+    internal ConcurrentQueue<string> Events { get; } = new();
+    internal HashSet<Ack05KeyboardKey> PressedKeys { get; } = new();
 
     internal Ack05KeyboardKey? FailKeyUp { get; set; }
 
-    public void KeyDown(Ack05KeyboardKey key) => Events.Add($"down {key}");
+    public void KeyDown(Ack05KeyboardKey key)
+    {
+        PressedKeys.Add(key);
+        Events.Enqueue($"down {key}");
+    }
 
     public void KeyUp(Ack05KeyboardKey key)
     {
-        Events.Add($"up {key}");
+        Events.Enqueue($"up {key}");
         if (FailKeyUp == key)
         {
             throw new IOException($"simulated {key} key-up failure");
         }
+        PressedKeys.Remove(key);
     }
 
-    public void MouseWheel(int steps) => Events.Add($"wheel {steps}");
+    public void MouseWheel(int steps) => Events.Enqueue($"wheel {steps}");
 }
 
 sealed class RecordingTargetLauncher : IAck05TargetLauncher
@@ -2128,6 +2279,8 @@ sealed class ChannelReportSource : IAck05ReportSource
     public int InputReportLength => 32;
 
     internal void Write(byte[] report) => _reports.Writer.TryWrite(report);
+
+    internal void Disconnect() => _reports.Writer.TryComplete(new IOException("simulated disconnect"));
 
     public async ValueTask<int> ReadAsync(
         Memory<byte> buffer,

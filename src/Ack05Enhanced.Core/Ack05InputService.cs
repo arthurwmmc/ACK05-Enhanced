@@ -104,6 +104,7 @@ public sealed class Ack05InputService
             while (!cancellationToken.IsCancellationRequested)
             {
                 var count = await source.ReadAsync(buffer, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 if (count == 0)
                 {
                     throw new EndOfStreamException(
@@ -112,6 +113,7 @@ public sealed class Ack05InputService
 
                 foreach (var input in session.ProcessReport(buffer.AsSpan(0, count)))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     await _sink.OnInputAsync(input, cancellationToken);
                 }
             }
@@ -127,9 +129,17 @@ public sealed class Ack05InputService
         {
             try
             {
-                foreach (var input in session.Reset())
+                if (_sink is IAck05GestureSink gestures)
                 {
-                    await _sink.OnInputAsync(input, CancellationToken.None);
+                    // A synthetic physical Up could commit a tap, combo or radial selection.
+                    gestures.CancelCapture();
+                }
+                else
+                {
+                    foreach (var input in session.Reset())
+                    {
+                        await _sink.OnInputAsync(input, CancellationToken.None);
+                    }
                 }
             }
             finally
